@@ -91,6 +91,11 @@ function privateSpillDir(): string {
   return defaultSpillDir
 }
 
+function isRecoverableSpillError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return code === 'ENOENT' || code === 'EPERM'
+}
+
 /**
  * Collects one stream with a bounded in-memory tail. With a spill cap, on
  * first overflow a spill file is created and every chunk (including those
@@ -126,12 +131,21 @@ export class OutputCollector {
    * is enabled) and every chunk (already-collected ones included) is appended
    * there from then on; the in-memory tail then drops whole chunks from its
    * head (or the head of a single over-cap chunk) until it fits the cap again.
+   * If the spill directory disappears, spilling is disabled for this stream
+   * and tail collection continues.
    * @param chunk - the raw bytes from one stream 'data' event.
    */
   push(chunk: Buffer): void {
     this.total += chunk.length
     const overflows = this.bytes + chunk.length > this.maxBytes
-    if (!this.spillDisabled && (overflows || this.spillFd !== undefined)) this.spillAll(chunk)
+    if (!this.spillDisabled && (overflows || this.spillFd !== undefined)) {
+      try {
+        this.spillAll(chunk)
+      } catch (error) {
+        if (!isRecoverableSpillError(error)) throw error
+        this.discardSpill()
+      }
+    }
     this.chunks.push(chunk)
     this.bytes += chunk.length
     while (this.bytes > this.maxBytes) {

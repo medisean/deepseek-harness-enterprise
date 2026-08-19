@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, statSync, unlinkSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -949,6 +949,17 @@ describe('environment and spill-file hardening', () => {
     expect(dir).toMatch(/dsh-subprocess-/)
     const mode = statSync(dir).mode & 0o777
     expect(mode).toBe(0o700)
+  })
+
+  it('keeps the bounded tail when the spill directory disappears', () => {
+    const missingDir = mkdtempSync(join(tmpdir(), 'dsh-subprocess-missing-'))
+    rmSync(missingDir, { recursive: true, force: true })
+    const collector = new OutputCollector(4, 1024, 'stdout', missingDir)
+
+    collector.push(Buffer.from('head'))
+    expect(() => { collector.push(Buffer.from('tail')) }).not.toThrow()
+
+    expect(collector.finalize()).toEqual({ text: 'tail', truncated: true })
   })
 
   it('killGroup never throws, even for EPERM-style failures', () => {
