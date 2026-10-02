@@ -2,6 +2,8 @@
 
 [English](README.md) | 中文
 
+本仓库是独立维护的企业隐私分支，并非 DeepSeek 官方发行版。首版默认关闭会话日志请求字段、插件清单请求字段、OTel 会话上送和桌面端产品埋点。实际覆盖范围、内网部署步骤和仍需企业侧落实的控制见[企业部署说明](ENTERPRISE.zh.md)。
+
 DeepSeek Harness（`dsh`）是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架）。
 
 它构建于**一切皆插件**的架构之上，由 [Cordis](https://github.com/cordiverse/cordis) 驱动，其设计参见论文 [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512)。
@@ -20,7 +22,7 @@ DeepSeek Harness 处于 _开发者预览_ 阶段，正在快速迭代。**未来
 
 ### 通过 `npm` 运行
 
-安装 `Node.js`，然后运行：
+以下 npm 包由上游发布，不包含本分支的隐私默认值。仅需使用上游发行版时，安装 `Node.js` 后运行：
 
 ```sh
 npx @deepseek-ai/dsh web
@@ -35,7 +37,7 @@ npx @deepseek-ai/dsh web
 如需从仓库源码运行：
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
+git clone https://github.com/medisean/deepseek-harness-enterprise.git
 cd deepseek-harness
 pnpm install
 pnpm run build

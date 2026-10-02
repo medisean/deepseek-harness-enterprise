@@ -25,6 +25,8 @@ Use `dsh --profile sdk-minimal` when an SDK client needs a small, explicit codin
 <a id="use-this-package"></a>
 ## Use this package
 
+This fork disables the DeepSeek session-log and plugin-inventory request fields in this standalone profile. Its shell remains unrestricted by the workspace path; isolate the process before using it with enterprise data.
+
 Launch the profile directly or select it from the Python SDK. Supply an explicit `DSH_HOME`, use a disposable workspace, and provide the model credential through `DEEPSEEK_API_KEY`.
 
 ```sh

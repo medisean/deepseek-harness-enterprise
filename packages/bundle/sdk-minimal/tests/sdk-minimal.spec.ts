@@ -60,6 +60,8 @@ describe('dsh-sdk-minimal bundle', () => {
       ['sessions', '@deepseek-ai/dsh-session-persistence-jsonl'],
     ])
     expect(rows.find(row => row.id === 'sdk-app-startup')?.config).toEqual({ profile: 'sdk-minimal' })
+    expect(rows.find(row => row.id === 'session-log-deepseek')?.config?.enabled).toBe(false)
+    expect(rows.find(row => row.id === 'plugin-package-inventory-deepseek')?.config?.enabled).toBe(false)
     expect(rows.find(row => row.id === 'sdk-jsonrpc-server')).toMatchObject({
       inject: ['sdkAppStartup', 'loader'],
       config: { maxTokensAsSuccess: false },

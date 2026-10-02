@@ -25,6 +25,8 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
+本分支在该独立 profile 中关闭 DeepSeek 会话日志和插件包清单请求字段。Shell 仍可访问进程有权访问的路径；处理企业数据前应隔离运行进程。
+
 直接启动该 profile，或从 Python SDK 选择它。提供显式 `DSH_HOME`、使用一次性 workspace，并通过 `DEEPSEEK_API_KEY` 提供模型凭据。
 
 ```sh

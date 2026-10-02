@@ -2,6 +2,8 @@
 
 English | [中文](README.zh.md)
 
+This repository is an independent enterprise privacy fork. Its first release disables session-log request metadata, plugin inventory request metadata, OTel session delivery, and Desktop product analytics by default. See [enterprise deployment](ENTERPRISE.zh.md) for the exact scope and remaining controls. It is not an official DeepSeek distribution.
+
 DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
 
 It is built on an **everything-is-a-plugin** architecture and powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512).
@@ -18,7 +20,7 @@ Review the [safety notice](SAFETY.md) before running the project.
 
 ### Run from `npm`
 
-Install `Node.js`, then run:
+The published npm package is maintained by upstream and does not include this fork's privacy defaults. Install `Node.js`, then run it only when you want the upstream distribution:
 
 ```sh
 npx @deepseek-ai/dsh web
@@ -31,7 +33,7 @@ The command starts the Web UI at `http://127.0.0.1:3080` by default and opens it
 To run from a repository checkout:
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
+git clone https://github.com/medisean/deepseek-harness-enterprise.git
 cd deepseek-harness
 pnpm install
 pnpm run build

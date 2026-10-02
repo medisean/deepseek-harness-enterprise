@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write README.md
 /deepseek-harness:
-  en: f68c4f080ce55ff2
-  zh: 88a76d7f7f0b260e
+  en: 604ef78717d87240
+  zh: cc295c30c8cf7a49
 /deepseek-harness/developer-preview:
   en: 4ef4d8a71ac143f0
   zh: 1bfc3149ba8e5543
@@ -12,8 +12,8 @@
   en: 4e0248e4c6474fc6
   zh: eb2fb8d78c7d6bc0
 /deepseek-harness/run/run-from-npm:
-  en: e22005cd42e6cbad
-  zh: 0f536f4208df1d60
+  en: 106166d0044fa330
+  zh: 6bfce329b42d8dba
 /deepseek-harness/run/run-from-source:
   en: 819e3f7c144d0d64
   zh: de815f040975dba7
