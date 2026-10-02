@@ -45,6 +45,8 @@ kind: "package-reference"
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `mode` | `read-only` | 会话起始的部署默认模式，加载时验证 |
+| `maximumMode` | `danger-full-access` | 部署默认值、已保存的会话切换和显式批准覆盖均不能超过此模式 |
+| `allowedWorkspaceRoot` | 未设置 | 必须包含每个会话工作区的现有主机目录；会话越界时模型请求或受限调用直接失败 |
 | `workspaceRoot` | `process.cwd()` | 无 agent 调用或没有 cwd 的会话所用的绝对回退根目录；相对值在加载时拒绝。普通 agent 调用使用会话的不可变 cwd |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-sandbox-policy)是每个受支持字段及其 JSDoc 的穷尽式真源。

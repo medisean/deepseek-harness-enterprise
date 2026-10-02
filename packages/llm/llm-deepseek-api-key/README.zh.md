@@ -37,6 +37,8 @@ kind: "package-reference"
 
 端点和凭据引用来自同一次配置解析；进行中的请求保留该快照，后续配置更新仅影响后续请求。账号登录态不影响该路由使用的凭据。
 
+受管 Desktop profile 将解析后的端点固定为管理员策略中的网关，即使实时设置修改 `baseURL` 也不改变请求目的地。非受管 profile 仍使用配置地址或公网默认地址。
+
 `models` 是该 provider 独立的可配置目录；默认值和协议能力来自共享传输包。目录判断不探测推理端点。设置命名空间采用 Cordis entry id，没有 entry 时采用插件名。产品保留 official 的 `llm-deepseek` entry id，账号使用 `llm-deepseek-account`。
 
 <a id="understand-the-implementation"></a>

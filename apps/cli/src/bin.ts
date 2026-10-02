@@ -16,6 +16,8 @@ import type { RunProfileOptions } from './profile-boot.ts'
 export type RunCliOptions = Pick<RunProfileOptions, 'packageManager'> & {
   /** Permit plugin commands for Desktop's existing profile; reserved for its installed carrier. */
   manageDesktopProfile?: boolean
+  /** Restrict the packaged CLI to the managed Desktop profile. */
+  enterprisePolicy?: RunProfileOptions['enterprisePolicy']
 }
 
 /**
@@ -25,8 +27,11 @@ export type RunCliOptions = Pick<RunProfileOptions, 'packageManager'> & {
  */
 export async function runCli(options: RunCliOptions = {}): Promise<void> {
   const version = getDshRuntimeVersion()
-  const { manageDesktopProfile, ...profileOptions } = options
+  const { manageDesktopProfile, enterprisePolicy, ...profileOptions } = options
   const invocation = parseDshArgs(process.argv.slice(2), version, manageDesktopProfile)
+  if (enterprisePolicy !== undefined && (invocation.mode !== 'profile' || invocation.profile !== 'desktop')) {
+    throw new Error('enterprise policy: the packaged CLI may launch the managed Desktop profile only')
+  }
 
   switch (invocation.mode) {
     case 'profile': {
@@ -39,6 +44,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
           patchFiles: invocation.patches,
           args: invocation.args,
           ...profileOptions,
+          ...(enterprisePolicy === undefined ? {} : { enterprisePolicy }),
         })
       } catch (error) {
         if (!(error instanceof StartupError)) throw error

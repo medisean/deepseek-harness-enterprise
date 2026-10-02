@@ -688,6 +688,10 @@ jobs:
           packages/workflow/workflow-ptc/tests/workflow-ptc.spec.ts
           packages/workflow/tool-ralph/tests/integration.spec.ts
           packages/subprocess/subprocess-local/tests/process-exit.spec.ts
+          packages/boot/app-boot/tests/enterprise-policy.spec.ts
+          packages/sandbox/sandbox-policy/tests/policy.spec.ts
+          packages/llm/llm-deepseek-api-key/tests/enterprise-gateway.spec.ts
+          apps/cli/tests/enterprise-cli.spec.ts
 
   # Single stable required check for branch protection: require "all checks
   # passed" instead of enumerating matrix legs whose names change as lanes and

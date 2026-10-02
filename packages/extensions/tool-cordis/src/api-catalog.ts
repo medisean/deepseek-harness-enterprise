@@ -1784,6 +1784,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Launch-time DSH_TELEMETRY_DISABLED value; any non-empty value opts out.',
         parameters: [],
       },
+      {
+        signature: 'readonly enterprisePolicy?: EnterprisePolicy',
+        description: 'Present only for the machine-managed Desktop launch.',
+        parameters: [],
+      },
     ],
   },
   {
@@ -1840,13 +1845,23 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
+        signature: 'readonly maximumMode: SandboxMode',
+        description: 'Highest mode that a session or explicit override may select.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly allowedWorkspaceRoot: string | undefined',
+        description: 'Canonical ancestor required for every session workspace, when set.',
+        parameters: [],
+      },
+      {
         signature: 'readonly workspaceRoot: string',
         description: 'The absolute `workspace-write` fallback root for calls without a session cwd.',
         parameters: [],
       },
       {
         signature: 'resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy',
-        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session cwd is its workspace-write boundary; the configured root is the fallback for agentless calls and sessions without a cwd.',
+        description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. The configured maximum caps that selection. A session cwd is its workspace-write boundary; the configured root is the fallback for agentless calls and sessions without a cwd. A configured allowed root rejects a workspace whose canonical path escapes it.',
         parameters: [{ name: 'request', description: 'optional session and approved mode override.' }],
         returns: 'the fully resolved per-call mode and absolute workspace root.',
       },
@@ -5152,6 +5167,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'EncodedImageAttachment',
     declaration: 'export interface EncodedImageAttachment {\n    mediaType: ImageMediaType;\n    data: string;\n    name?: string;\n}',
+  },
+  {
+    name: 'EnterprisePolicy',
+    declaration: 'export interface EnterprisePolicy {\n    readonly version: 1;\n    readonly modelGateway: string;\n    readonly workspaceMode: \'read-only\' | \'workspace-write\';\n    readonly workspaceRoot: string;\n}',
   },
   {
     name: 'EpochHeader',

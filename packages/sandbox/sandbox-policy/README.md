@@ -45,6 +45,8 @@ Load the package with a default mode; the fail-safe default is `read-only`, and 
 | Field | Default | Meaning |
 |---|---|---|
 | `mode` | `read-only` | The deployment default mode a session starts from, validated at load |
+| `maximumMode` | `danger-full-access` | Highest mode accepted from the deployment default, a saved session switch, or an explicit approved override |
+| `allowedWorkspaceRoot` | unset | Existing host directory that must contain each session workspace; a session outside it fails before a model request or confined call |
 | `workspaceRoot` | `process.cwd()` | Absolute fallback root for agentless calls or sessions without a cwd; relative values fail at load. Normal agent calls use the session's immutable cwd |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-sandbox-policy) is the exhaustive source for every accepted field and its JSDoc.

@@ -13,6 +13,12 @@ import { en, zh } from '../src/locale.ts'
 import { DesktopUpdatePreparationError } from '../src/update-error.ts'
 import { writeCrashReport } from '../src/crash-report.ts'
 
+const loadPolicy = vi.hoisted(() => vi.fn<() => unknown>(() => undefined))
+vi.mock('@deepseek-ai/dsh-app-boot', async importOriginal => ({
+  ...await importOriginal<typeof import('@deepseek-ai/dsh-app-boot')>(),
+  loadEnterprisePolicy: loadPolicy,
+}))
+
 type InvokeEvent = { sender?: unknown; senderFrame: { url: string } }
 type InvokeHandler = (event: InvokeEvent, ...args: unknown[]) => unknown
 
@@ -392,6 +398,7 @@ function applicationMenuItems(): MenuItemConstructorOptions[] {
 beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()
+  loadPolicy.mockReturnValue(undefined)
   harness.dialog.showMessageBox.mockReset()
   harness.dialog.showMessageBox.mockResolvedValue({ response: 1 })
   testAuth.login.mockReset()
@@ -1051,6 +1058,15 @@ describe('desktop main startup', () => {
     await harness.navigated.promise
     return harness.hosts[0]!
   }
+
+  it('does not check the upstream update feed in a managed packaged launch', async () => {
+    loadPolicy.mockReturnValue({ version: 1, modelGateway: 'https://gateway.example.test/anthropic',
+      workspaceMode: 'read-only', workspaceRoot: '/approved' })
+    await readyForUpdate()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(loadPolicy).toHaveBeenCalledOnce()
+    expect(harness.updateCheck).not.toHaveBeenCalled()
+  })
 
   it.each([
     ['win32', ['--updated'], true],

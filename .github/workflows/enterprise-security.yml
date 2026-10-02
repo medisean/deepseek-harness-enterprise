@@ -1,0 +1,34 @@
+name: Enterprise security
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  managed-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: pnpm install --frozen-lockfile
+      - name: Managed policy and capability tests
+        run: >-
+          pnpm exec vitest run
+          packages/boot/app-boot/tests/enterprise-policy.spec.ts
+          packages/sandbox/sandbox-policy/tests/policy.spec.ts
+          packages/llm/llm-deepseek-api-key/tests/enterprise-gateway.spec.ts
+          apps/cli/tests/enterprise-cli.spec.ts
+      - name: Desktop startup regression
+        if: runner.os == 'macOS'
+        run: pnpm exec vitest run apps/desktop/tests/main-startup.spec.ts

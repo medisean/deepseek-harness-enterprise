@@ -37,3 +37,16 @@ export function plainOptions(config: Config): Options {
 export function resolveAdapterOptions(config: Options, environment?: LaunchEnvironmentSnapshot): ResolvedDeepSeekOptions {
   return { ...resolveProtocolOptions(config, environment), apiKeyEnv: credentialRef(config.apiKeyEnv ?? 'DEEPSEEK_API_KEY') }
 }
+
+/** Pin an enterprise request to the administrator gateway after live settings resolution.
+ * @param config - Live provider settings.
+ * @param environment - Launch environment for unmanaged endpoint fallback.
+ * @param gateway - Administrator endpoint, when the profile is managed.
+ * @returns Request configuration with the managed endpoint applied last.
+ */
+export function resolveEnterpriseAdapterOptions(
+  config: Options, environment: LaunchEnvironmentSnapshot | undefined, gateway: string | undefined,
+): ResolvedDeepSeekOptions {
+  const resolved = resolveAdapterOptions(config, environment)
+  return gateway === undefined ? resolved : { ...resolved, baseURL: gateway }
+}

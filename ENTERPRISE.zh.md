@@ -1,42 +1,36 @@
-# DeepSeek Harness 企业隐私分支：v0.1
+# DeepSeek Harness 企业隐私分支
 
-本仓库基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 MIT 许可源码，是独立维护的社区分支。它面向企业试点，提供更保守的数据上送默认值；它尚未提供企业身份认证、集中策略强制执行或经过审计的安全隔离。
+本仓库基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 MIT 许可源码，是独立维护的社区分支。受管 Desktop 面向由企业分发、配置和保护终端的试点环境。
 
-## 首版包含什么
+## 管理员策略
 
-| 配置项 | 本分支默认值 | 范围 |
-| --- | --- | --- |
-| `session-log-deepseek.enabled` | `false` | base 组合及独立的 `sdk-minimal` 组合；停止向 DeepSeek 协议请求附加 `dsh_session_log` |
-| `plugin-package-inventory-deepseek.enabled` | `false` | 同上；停止附加 `dsh_plugin_packages` |
-| `session-telemetry-otel.mode` | `DISABLED` | base 组合；停止 OTel 会话上送 |
-| `product-analytics.enabled` | `false` | Desktop 组合；默认不采集新的产品埋点 |
+受管 Desktop 启动前必须读取机器级 `policy.json`。macOS 路径为 `/Library/Application Support/DeepSeek Harness Enterprise/policy.json`；Windows 路径为 `C:\ProgramData\DeepSeek Harness Enterprise\policy.json`。文件内容示例：
 
-这些是随发行版交付的**默认配置**。用户的 profile 和 home patch 可覆盖它们；`product-analytics` 也可以通过实时设置重新开启。企业需要强制策略时，必须增加独立的只读策略层和防篡改机制。
-
-## 部署试点
-
-1. 在受控设备上从本仓库的固定提交构建，保留上游 MIT 许可和第三方许可声明。官方已签名安装包不包含本分支的改动，不能直接当作本分支发行版。
-2. 为每位员工分配独立的操作系统账户、Harness home 和工作目录。按最小权限运行，不把共享密钥放入仓库或安装包。
-3. 在「设置 → 模型 → 添加模型提供商 → 自定义模型 API」中配置企业模型网关的 URL、实际 API 协议、模型 ID 和个人凭证。内置 DeepSeek 适配器也可通过受信任的 `DEEPSEEK_BASE_URL` 指向兼容的 Messages 网关。配置完成后检查一次真实请求；仅填写内网 URL 不会限制其他提供商或插件的联网行为。
-4. 在设备防火墙或企业代理上限定客户端和其子进程的出站目标，至少覆盖模型、账户登录、更新、插件安装、Web 工具和遥测路径。若要求完全离线，还要提供本地模型服务并关闭不需要的联网功能。
-5. 用非敏感样本检查请求目的地和请求体，确认模型内容与附件只进入批准的网关；检查会话文件、凭据文件和诊断日志的访问权限与保留期限。
-
-开发机可先运行 Web 组合核对这些默认值：
-
-```sh
-corepack enable
-pnpm install --frozen-lockfile
-pnpm run build
-pnpm dsh web --no-open
+```json
+{
+  "version": 1,
+  "modelGateway": "https://gateway.example.com/anthropic",
+  "workspaceMode": "read-only",
+  "workspaceRoot": "/Users/Shared/EnterpriseWorkspaces"
+}
 ```
 
-源码构建要求 Node.js `^22.19.0` 或 `>=24.0.0`，以及仓库固定的 pnpm 版本。Desktop 打包、签名、公证和更新源配置见 [上游 Desktop 构建说明](apps/desktop/README.zh.md)。Windows 有未签名安装包命令可供本地验证；面向员工分发仍需企业自己的签名凭证和更新基础设施。
+`modelGateway` 必须是企业批准的 HTTPS Messages 兼容网关，不能是 `api.deepseek.com`；`workspaceMode` 只接受 `read-only` 或 `workspace-write`。`workspaceRoot` 必须是已存在的绝对目录，不能是文件系统根目录；Windows 部署时使用 Windows 绝对路径。策略缺失、损坏或字段不符时，Desktop 拒绝启动。macOS 还检查策略文件及其父目录均由 root 拥有，且组和其他用户不可写；Windows 部署程序必须为该目录和文件设置仅管理员可写的 ACL。本仓库当前不提供 Windows 策略 ACL 的运行时证明。
 
-## 首版的安全边界
+受管 Desktop 只接受随安装包交付的 `dsh-base` 和 `dsh-web-app` 组合，并要求 profile、home 和启动补丁为空。桌面端随附的 `dsh` 命令只允许启动受管 Desktop profile。管理员应将安装目录设为普通用户不可写，并使用企业签名和软件分发机制交付安装包；源码 CLI 的其他 profile 不属于受管模式。
 
-- 默认模型路由仍可能指向公网 DeepSeek API；自定义提供商也可以指向公网。模型出站限制必须由企业网络策略落实。
-- 工具和插件能使用操作系统授予进程的文件、命令与网络能力。Harness 的审批和沙箱不能替代独立容器、虚拟机或终端防护。`sdk-minimal` 的 Shell 当前仍使用 `danger-full-access`。
-- 当前没有企业 SSO、统一审计、插件白名单强制执行、设备策略锁定和多用户服务端隔离。此版本适合隔离试点，不应作为已认证的企业生产安全产品宣传。
-- 上游仍在开发者预览阶段，升级可能改变配置项或数据流。每次合并上游版本后要重新审核此表和实际网络请求。
+## 已落实的应用内限制
 
-下一阶段优先实现管理员策略的强制加载、模型与插件出站白名单、企业身份和凭证接入，再建设独立签名及更新流程。
+- 内置 DeepSeek 模型请求在读取实时设置后仍使用管理员网关，不再回退到公网默认地址；其他模型适配器在受管组合中禁用。
+- 关闭模型 Web 搜索与抓取、Shell 和 PowerShell 工具、持续终端、PTC、MCP、插件管理与配置编辑入口。受管标准预设不加载工具，其他预设停用。首版保留聊天能力；尚不开放受管文件编辑或命令执行。
+- 文件沙箱模式上限和工作区根目录由策略决定。旧会话中记录的 `danger-full-access` 和显式高权限请求都会降到该上限；位于批准根目录外的会话工作区在模型请求时失败。受管模式不提供高权限预设入口。
+- 会话日志请求字段、插件清单请求字段、OTel 会话遥测、桌面产品埋点保持关闭。打包 Desktop 不检查或下载上游自动更新。
+- 此版不批准任何第三方插件。管理员选择额外 bundle、用户补丁或安装新插件后，受管启动会拒绝；未来版本可增加版本固定的批准清单。
+
+## 部署侧必须完成
+
+1. 将策略放在上述机器级路径，并保护策略和安装目录的写权限；Windows 还需验证 ACL。为员工分配独立系统账户、Harness home 与工作目录。
+2. 将网关地址解析、TLS 证书和凭据接入企业网络。通过终端防火墙、代理或网络隔离，只允许应用及其子进程访问批准的网关和必要内网服务。应用内禁用工具不能限制 Electron 视图、外部浏览器或其他进程的所有出站连接。
+3. 用非敏感样本核对请求目的地与请求体，再按企业保留期限处理会话、凭据和诊断文件。
+
+本仓库没有提供多用户服务端隔离、SSO、集中审计、第三方插件审批清单或完整的 Windows ACL 和出站规则安装器。macOS 本地策略与组合测试已运行；Windows 的真实安装、ACL 与网络阻断仍需在 Windows 测试机验收。

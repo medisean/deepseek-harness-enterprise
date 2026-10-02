@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-This repository is an independent enterprise privacy fork. Its first release disables session-log request metadata, plugin inventory request metadata, OTel session delivery, and Desktop product analytics by default. See [enterprise deployment](ENTERPRISE.zh.md) for the exact scope and remaining controls. It is not an official DeepSeek distribution.
+This repository is an independent enterprise privacy fork. Managed Desktop requires a machine policy, pins the built-in model to an approved gateway, and disables third-party plugins and execution tools. See [enterprise deployment](ENTERPRISE.zh.md) for its scope and required network controls. It is not an official DeepSeek distribution.
 
 DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
 

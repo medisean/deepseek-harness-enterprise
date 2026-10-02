@@ -15,7 +15,7 @@ import SandboxPolicyService, { SANDBOX_MODES, setSandboxMode } from '@deepseek-a
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt, { renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 
-async function mounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {}) {
+async function mounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; maximumMode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string; allowedWorkspaceRoot?: string } = {}) {
   const ctx = new Context()
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SandboxPolicyService, config)
@@ -43,6 +43,36 @@ async function policyContext(ctx: Context, activeSession: Session): Promise<stri
 }
 
 describe('SandboxPolicyService', () => {
+  it('caps saved and explicit danger modes at the managed maximum', async () => {
+    const ctx = await mounted({ mode: 'read-only', maximumMode: 'workspace-write' })
+    const active = session('old-session', '/workspace')
+    setSandboxMode(active, 'danger-full-access')
+    expect(ctx.sandboxPolicy.resolve({ session: active }).mode).toBe('workspace-write')
+    expect(ctx.sandboxPolicy.resolve({ mode: 'danger-full-access' }).mode).toBe('workspace-write')
+    await ctx.fiber.dispose()
+  })
+
+  it('refuses a session workspace outside the managed root', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-managed-workspace-'))
+    const outside = mkdtempSync(join(tmpdir(), 'dsh-managed-outside-'))
+    try {
+      const ctx = await mounted({ workspaceRoot: root, allowedWorkspaceRoot: root })
+      try {
+        expect(ctx.sandboxPolicy.resolve({ session: session('inside', root) }).workspaceRoot).toBe(root)
+        expect(() => ctx.sandboxPolicy.resolve({ session: session('outside', outside) }))
+          .toThrow('outside allowedWorkspaceRoot')
+        if (process.platform !== 'win32') {
+          const link = join(root, 'linked-outside')
+          symlinkSync(outside, link, 'dir')
+          expect(() => ctx.sandboxPolicy.resolve({ session: session('linked-outside', link) }))
+            .toThrow('outside allowedWorkspaceRoot')
+        }
+      } finally { await ctx.fiber.dispose() }
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+      rmSync(outside, { recursive: true, force: true })
+    }
+  })
   it('defaults to read-only under the process cwd', async () => {
     const ctx = await mounted()
     expect(ctx.sandboxPolicy.defaultMode).toBe('read-only')
