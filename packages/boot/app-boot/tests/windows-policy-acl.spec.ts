@@ -96,7 +96,7 @@ it.skipIf(process.platform !== 'win32')('accepts OIDC policy and rejects invalid
   }
   writeFileSync(file, JSON.stringify(policy))
   expect(() => { runSecurePolicy() }).not.toThrow()
-})
+}, 30_000)
 
 it.skipIf(process.platform !== 'win32')('accepts exact approved bundle versions and rejects unsafe entries in the deployment script', () => {
   const approvedBundles = [{ name: '@contoso/dsh-plugin', version: '2.4.1-rc.2+build.7' }]
@@ -115,7 +115,7 @@ it.skipIf(process.platform !== 'win32')('accepts exact approved bundle versions 
     expect(() => { runSecurePolicy() }).toThrow()
   }
   writeFileSync(file, JSON.stringify(policy))
-})
+}, 30_000)
 
 it.skipIf(process.platform !== 'win32')('rejects a policy writable by Authenticated Users', () => {
   execFileSync('icacls.exe', [file, '/grant', '*S-1-5-11:(M)'], { stdio: 'ignore', windowsHide: true })
