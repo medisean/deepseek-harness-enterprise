@@ -355,7 +355,7 @@ it('keeps the container-only enterprise gateway private and limits its package p
   const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
   expect(manifest.private).toBe(true)
   expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
-  expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: ['src'] } }))
+  expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: ['src'] } }).map(error => error.replaceAll('\\', '/')))
     .toEqual([
       'apps/enterprise-gateway/package.json: @deepseek-ai/dsh-enterprise-gateway: package.json files must not publish "src"',
       'apps/enterprise-gateway/package.json: @deepseek-ai/dsh-enterprise-gateway: package.json files must be []',

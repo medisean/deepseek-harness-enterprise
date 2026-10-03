@@ -175,7 +175,7 @@ describe('managed Desktop policy', () => {
     expect(() => hashEnterpriseBundleDirectory(directory)).toThrow('only regular files and directories are allowed')
   })
 
-  it.skipIf(process.platform === 'win32')('rejects bundle symlinks that resolve outside the protected installation', () => {
+  it('rejects bundle symlinks that resolve outside the protected installation', () => {
     const directory = join(root, 'bundle-symlink-fixture')
     mkdirSync(directory)
     writeFileSync(join(root, 'outside.js'), 'export default 1')
@@ -338,11 +338,9 @@ describe('managed Desktop policy', () => {
     expect(() => readProfilePatches('test', context, profile)).toThrow('is unavailable in the signed Desktop installation')
 
     writeFileSync(join(approvedDir, 'package.json'), JSON.stringify({ name: approvedName, version: '1.0.0' }))
-    if (process.platform !== 'win32') {
-      writeFileSync(join(root, 'escaping-target.js'), 'export default 1')
-      symlinkSync(join(root, 'escaping-target.js'), join(approvedDir, 'escape.js'))
-      expect(() => readProfilePatches('test', context, profile)).toThrow('cannot verify installed bundle')
-    }
+    writeFileSync(join(root, 'escaping-target.js'), 'export default 1')
+    symlinkSync(join(root, 'escaping-target.js'), join(approvedDir, 'escape.js'))
+    expect(() => readProfilePatches('test', context, profile)).toThrow('cannot verify installed bundle')
   })
 
   it('rejects an unresolved signed installation and sparse approved-bundle layers', () => {

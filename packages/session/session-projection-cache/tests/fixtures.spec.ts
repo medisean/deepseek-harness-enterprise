@@ -131,6 +131,7 @@ async function placeDoc(root: string, id: string, name: string): Promise<Fixture
 async function assertRewrite(ctx: Context, root: string, id: SessionId): Promise<void> {
   const session = ctx.sessions.create(id)
   session.append('fixtures-test/set-title', { title: '重写标题' })
+  expect(ctx.sessionProjections.stateOf(session, 'title')).toBe('重写标题')
   session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
   const path = join(root, projectionCacheDomainSpec.name, 'sessions', `${id}.json`)
   await vi.waitFor(async () => {

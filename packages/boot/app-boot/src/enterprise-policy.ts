@@ -55,6 +55,7 @@ export function loadEnterprisePolicy(path = enterprisePolicyPath(), platform: No
   if (platform === 'win32' && absolute === resolve(enterprisePolicyPath('win32'))) {
     assertWindowsPolicyAcl(absolute)
   }
+  /* v8 ignore start -- Windows Stats have no POSIX uid; the macOS ancestry guard runs on POSIX hosts. */
   if (platform === 'darwin') {
     for (let current = absolute; ; current = dirname(current)) {
       const info = lstatSync(current)
@@ -64,6 +65,7 @@ export function loadEnterprisePolicy(path = enterprisePolicyPath(), platform: No
       if (current === parse(current).root) break
     }
   }
+  /* v8 ignore stop */
   const value: unknown = JSON.parse(readFileSync(absolute, 'utf8'))
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('enterprise policy: expected a JSON object')
