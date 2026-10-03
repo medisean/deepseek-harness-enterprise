@@ -141,7 +141,7 @@ function assertEnterpriseBundles(
     let manifest: unknown
     try {
       packageDirectory = realpathSync.native(layer.packageDir)
-      manifest = JSON.parse(readFileSync(join(packageDirectory, 'package.json'), 'utf8')) as unknown
+      manifest = JSON.parse(readFileSync(join(packageDirectory, 'package.json'), 'utf8'))
     } catch {
       throw new Error(`enterprise policy: approved bundle ${approved.name} is unavailable in the signed Desktop installation`)
     }

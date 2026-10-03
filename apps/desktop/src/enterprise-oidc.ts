@@ -310,17 +310,27 @@ function tokenSet(tokens: TokenEndpointResponse, previous?: StoredTokenSet): Sto
 function parseStoredTokenSet(value: unknown): StoredTokenSet {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new EnterpriseOidcError('token-storage')
   const fields = value as Record<string, unknown>
+  const accessToken = fields.accessToken
+  const expiresAt = fields.expiresAt
+  const refreshToken = fields.refreshToken
+  const idToken = fields.idToken
   const keys = Object.keys(fields).sort().join(',')
   if ((keys !== 'accessToken,expiresAt,version' && keys !== 'accessToken,expiresAt,idToken,version'
     && keys !== 'accessToken,expiresAt,refreshToken,version'
     && keys !== 'accessToken,expiresAt,idToken,refreshToken,version')
-    || fields.version !== 1 || typeof fields.accessToken !== 'string' || fields.accessToken.length === 0
-    || !Number.isSafeInteger(fields.expiresAt)
-    || (fields.refreshToken !== undefined && (typeof fields.refreshToken !== 'string' || fields.refreshToken.length === 0))
-    || (fields.idToken !== undefined && (typeof fields.idToken !== 'string' || fields.idToken.length === 0))) {
+    || fields.version !== 1 || typeof accessToken !== 'string' || accessToken.length === 0
+    || typeof expiresAt !== 'number' || !Number.isSafeInteger(expiresAt)
+    || (refreshToken !== undefined && (typeof refreshToken !== 'string' || refreshToken.length === 0))
+    || (idToken !== undefined && (typeof idToken !== 'string' || idToken.length === 0))) {
     throw new EnterpriseOidcError('token-storage')
   }
-  return fields as unknown as StoredTokenSet
+  return {
+    version: 1,
+    accessToken,
+    expiresAt,
+    ...(typeof refreshToken === 'string' ? { refreshToken } : {}),
+    ...(typeof idToken === 'string' ? { idToken } : {}),
+  }
 }
 
 function isLoopbackAddress(address: string | undefined): boolean {
