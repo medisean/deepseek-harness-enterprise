@@ -32,7 +32,8 @@ $writeRights = [int64]([Security.AccessControl.FileSystemRights]::WriteData -bor
   [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
   [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
   [Security.AccessControl.FileSystemRights]::TakeOwnership)
-foreach ($candidate in @($path, (Split-Path -LiteralPath $path -Parent))) {
+$directory = [IO.Path]::GetDirectoryName($path)
+foreach ($candidate in @($path, $directory)) {
   $item = Get-Item -LiteralPath $candidate -Force
   if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'reparse point' }
   if (($item.Attributes -band [IO.FileAttributes]::Directory) -ne 0) {
