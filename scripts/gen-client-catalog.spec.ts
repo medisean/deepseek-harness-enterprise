@@ -11,6 +11,9 @@ import { describe, expect, it } from 'vitest'
 import { collectSlotEntries, oversizedSlotReports, resolveSlotEntries, validateSlotContracts } from './gen-client-catalog.ts'
 import type { SlotDeclaration, SlotRegistration, TypeDeclaration } from './slot-walk.ts'
 
+// Workspace traversal runs under the repository's instrumented coverage load.
+const workspaceScanTimeout = Math.max(30_000, Number(process.env.DSH_COVERAGE_TEST_TIMEOUT_MS ?? 0))
+
 /** A declaration with every field the catalog needs, overridable per case. */
 function declaration(over: Partial<SlotDeclaration> = {}): SlotDeclaration {
   return {
@@ -236,7 +239,7 @@ describe('the per-slot report budget', () => {
 })
 
 describe('the real workspace surface', () => {
-  it('collects every declared slot with a teachable contract', { timeout: 30_000 }, () => {
+  it('collects every declared slot with a teachable contract', { timeout: workspaceScanTimeout }, () => {
     const entries = collectSlotEntries(process.cwd())
     expect(entries.length).toBeGreaterThan(30)
     for (const entry of entries) {
