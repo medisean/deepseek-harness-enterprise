@@ -91,15 +91,15 @@ Function ${PREFIX}InstallerValidatePath
             ${EndIf}
         ${EndIf}
         ${If} $2 == $WINDIR
-        ${OrIf} $2 == $PROGRAMFILES32
-        ${OrIf} $2 == $PROGRAMFILES64
-        ${OrIf} $2 == $PROFILE
-        ${OrIf} $2 == $LOCALAPPDATA
-            ; Ancestors PROFILE and LOCALAPPDATA are allowed; the selected directory itself is not.
-            ${If} $2 == $WINDIR
-            ${OrIf} $2 == $PROGRAMFILES32
+            Return
+        ${EndIf}
+        ; Program Files is a valid ancestor for a machine-wide installation. The protected
+        ; roots themselves are not valid installation destinations.
+        ${If} $2 == $InstallerPath
+            ${If} $2 == $PROGRAMFILES32
             ${OrIf} $2 == $PROGRAMFILES64
-            ${OrIf} $2 == $InstallerPath
+            ${OrIf} $2 == $PROFILE
+            ${OrIf} $2 == $LOCALAPPDATA
                 Return
             ${EndIf}
         ${EndIf}
