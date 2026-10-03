@@ -43,7 +43,7 @@ beforeAll(() => {
       : error instanceof Error ? error.message : String(error)
     throw new Error(`Windows policy ACL fixture setup failed: ${diagnostic}`)
   }
-})
+}, 30_000)
 afterAll(() => { rmSync(root, { recursive: true, force: true }) })
 
 it.skipIf(process.platform !== 'win32')('accepts the administrator-owned policy provisioned by the deployment script', () => {
