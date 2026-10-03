@@ -38,9 +38,11 @@ beforeAll(() => {
       '-File', join(import.meta.dirname, '../../../../deploy/enterprise/Secure-Policy.ps1'), '-PolicyPath', file],
     { windowsHide: true, timeout: 15_000 })
   } catch (error) {
-    const diagnostic = error instanceof Error && 'stderr' in error && error.stderr instanceof Buffer
+    const diagnostic = error instanceof Error && 'stderr' in error && error.stderr instanceof Buffer && error.stderr.length > 0
       ? error.stderr.toString('utf8').trim()
-      : error instanceof Error ? error.message : String(error)
+      : error instanceof Error && 'stdout' in error && error.stdout instanceof Buffer && error.stdout.length > 0
+        ? error.stdout.toString('utf8').trim()
+        : error instanceof Error ? error.message : String(error)
     throw new Error(`Windows policy ACL fixture setup failed: ${diagnostic}`)
   }
 }, 30_000)
@@ -52,9 +54,11 @@ it.skipIf(process.platform !== 'win32')('accepts the administrator-owned policy 
     try {
       execFileSync(command, args, { windowsHide: options.windowsHide, timeout: options.timeout })
     } catch (error) {
-      diagnostic = error instanceof Error && 'stderr' in error && error.stderr instanceof Buffer
+      diagnostic = error instanceof Error && 'stderr' in error && error.stderr instanceof Buffer && error.stderr.length > 0
         ? error.stderr.toString('utf8').trim()
-        : error instanceof Error ? error.message : String(error)
+        : error instanceof Error && 'stdout' in error && error.stdout instanceof Buffer && error.stdout.length > 0
+          ? error.stdout.toString('utf8').trim()
+          : error instanceof Error ? error.message : String(error)
       throw error
     }
   }
