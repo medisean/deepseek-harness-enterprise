@@ -84,8 +84,11 @@ $keys = @($policy.PSObject.Properties.Name | Sort-Object)
 if (($keys -join ',') -ne 'modelGateway,version,workspaceMode,workspaceRoot' -or $policy.version -ne 1) {
   throw 'Policy must contain exactly version, modelGateway, workspaceMode, and workspaceRoot.'
 }
-if ($policy.modelGateway -isnot [string] -or $policy.workspaceRoot -isnot [string]
-    -or $policy.workspaceMode -notin @('read-only', 'workspace-write')) { throw 'Policy fields have invalid types or values.' }
+if (($policy.modelGateway -isnot [string]) -or
+    ($policy.workspaceRoot -isnot [string]) -or
+    ($policy.workspaceMode -notin @('read-only', 'workspace-write'))) {
+  throw 'Policy fields have invalid types or values.'
+}
 $workspace = [System.IO.Path]::GetFullPath($policy.workspaceRoot)
 if (-not (Test-Path -LiteralPath $workspace -PathType Container) -or
     $workspace.TrimEnd('\') -eq [System.IO.Path]::GetPathRoot($workspace).TrimEnd('\')) {
