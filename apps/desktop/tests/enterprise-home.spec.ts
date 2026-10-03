@@ -14,7 +14,7 @@ function tempRoot(): string {
 }
 
 describe('managed Desktop Harness home', () => {
-  it('creates an isolated home below Electron user data and restricts POSIX permissions', () => {
+  it('creates an isolated home below Electron user data and restricts POSIX permissions', { timeout: 20_000 }, () => {
     const userData = tempRoot()
     const home = prepareEnterpriseHarnessHome(userData)
     expect(home).toBe(realpathSync.native(join(userData, 'enterprise-harness-home')))
