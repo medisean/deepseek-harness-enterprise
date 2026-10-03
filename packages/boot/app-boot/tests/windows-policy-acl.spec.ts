@@ -99,7 +99,7 @@ it.skipIf(process.platform !== 'win32')('accepts OIDC policy and rejects invalid
 }, 30_000)
 
 it.skipIf(process.platform !== 'win32')('accepts exact approved bundle versions and rejects unsafe entries in the deployment script', () => {
-  const approvedBundles = [{ name: '@contoso/dsh-plugin', version: '2.4.1-rc.2+build.7' }]
+  const approvedBundles = [{ name: '@contoso/dsh-plugin', version: '2.4.1-rc.2+build.7', sha256: 'b'.repeat(64) }]
   writeFileSync(file, JSON.stringify({ ...policy, approvedBundles }))
   expect(() => { runSecurePolicy() }).not.toThrow()
   for (const invalid of [
@@ -109,6 +109,7 @@ it.skipIf(process.platform !== 'win32')('accepts exact approved bundle versions 
     [{ name: '@deepseek-ai/dsh-base', version: '2.4.1' }],
     [{ name: '../plugin', version: '2.4.1' }],
     [{ name: '@contoso/dsh-plugin', version: '2.4.1', extra: true }],
+    [{ name: '@contoso/dsh-plugin', version: '2.4.1', sha256: 'B'.repeat(64) }],
     [approvedBundles[0], approvedBundles[0]],
   ]) {
     writeFileSync(file, JSON.stringify({ ...policy, approvedBundles: invalid }))

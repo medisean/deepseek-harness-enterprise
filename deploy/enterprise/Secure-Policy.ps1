@@ -125,13 +125,14 @@ if ($policy.PSObject.Properties.Name -contains 'approvedBundles') {
   $exactSemverPattern = '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$'
   foreach ($bundle in $bundles) {
     if ($null -eq $bundle -or $bundle -isnot [System.Management.Automation.PSCustomObject] -or
-        (@($bundle.PSObject.Properties.Name | Sort-Object) -join ',') -ne 'name,version' -or
+        (@($bundle.PSObject.Properties.Name | Sort-Object) -join ',') -ne 'name,sha256,version' -or
         $bundle.name -isnot [string] -or $bundle.name.Length -gt 214 -or
         $bundle.name -notmatch $packageNamePattern -or
         $bundle.name -in @('@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app') -or
         $bundle.version -isnot [string] -or $bundle.version.Length -gt 128 -or
-        $bundle.version -notmatch $exactSemverPattern -or -not $bundleNames.Add($bundle.name)) {
-      throw 'approvedBundles entries require unique non-core package names and exact semantic versions.'
+        $bundle.version -notmatch $exactSemverPattern -or
+        $bundle.sha256 -cnotmatch '^[a-f0-9]{64}$' -or -not $bundleNames.Add($bundle.name)) {
+      throw 'approvedBundles entries require unique non-core package names, exact semantic versions, and lowercase SHA-256 digests.'
     }
   }
 }

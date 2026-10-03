@@ -5170,7 +5170,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'EnterpriseApprovedBundle',
-    declaration: 'export interface EnterpriseApprovedBundle {\n    readonly name: string;\n    readonly version: string;\n}',
+    declaration: 'export interface EnterpriseApprovedBundle {\n    readonly name: string;\n    readonly version: string;\n    readonly sha256: string;\n}',
   },
   {
     name: 'EnterpriseOidcPolicy',

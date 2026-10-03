@@ -26,7 +26,7 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用本包
 
-受管 Desktop 启动器在加载插件前提供机器级策略。其 profile 组合拒绝用户补丁和非随附的 Desktop bundle，除非机器策略在 `approvedBundles` 中列出精确包名和版本；每个批准的 bundle 都必须解析自签名且只读的 Desktop 安装目录。OIDC 策略还会提供可选的 `ctx.enterpriseAuth` 回调，按需返回当前网关访问令牌；机器策略未配置 SSO 时不会提供此回调。
+受管 Desktop 启动器在启动前读取机器级策略。profile 组合拒绝用户补丁和非随附 bundle，除非 `approvedBundles` 列出每个额外包的精确名称、版本和 SHA-256 目录摘要；挂载插件代码前，Desktop 会核对摘要，并要求 bundle 位于签名且只读的安装目录中。可在仓库根目录运行 `pnpm run enterprise:bundle-hash <package-directory> --root <desktop-node-modules-directory>` 生成摘要。摘要覆盖包文件和目录，并记录符号链接在受保护安装目录内解析到的位置；它拒绝越界链接，但不计算链接目标或包目录外依赖的内容摘要。OIDC 策略还会提供可选的 `ctx.enterpriseAuth` 回调，按需返回当前网关访问令牌；机器策略未配置 SSO 时不会提供此回调。
 
 用此包启动应用是一个小而显式的入口：你给它一个配置文件，它运行整个启动过程。本节说明你能做什么、能得到什么；每个结果背后的 helper 调用记录在下方可折叠的实现章节中。
 

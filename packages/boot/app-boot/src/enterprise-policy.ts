@@ -21,6 +21,8 @@ export interface EnterpriseApprovedBundle {
   readonly name: string
   /** Exact installed semantic version; ranges and tags are rejected. */
   readonly version: string
+  /** Lowercase SHA-256 digest of bundle files, directories, and resolved in-installation symlink targets. */
+  readonly sha256: string
 }
 
 /** Public OIDC client configuration for managed Desktop sign-in. */
@@ -109,17 +111,18 @@ function parseApprovedBundles(value: unknown): readonly EnterpriseApprovedBundle
       throw new Error('enterprise policy: each approvedBundles entry must contain a package name and exact version')
     }
     const fields = entry as Record<string, unknown>
-    if (Object.keys(fields).sort().join(',') !== 'name,version'
+    if (Object.keys(fields).sort().join(',') !== 'name,sha256,version'
       || typeof fields.name !== 'string' || fields.name.length > 214
       || !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/u.test(fields.name)
       || fields.name === '@deepseek-ai/dsh-base' || fields.name === '@deepseek-ai/dsh-web-app'
       || typeof fields.version !== 'string' || fields.version.length > 128
       || !/^\d/u.test(fields.version) || semver.valid(fields.version) === null
+      || typeof fields.sha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(fields.sha256)
       || names.has(fields.name)) {
-      throw new Error('enterprise policy: approvedBundles entries require unique non-core package names and exact semantic versions')
+      throw new Error('enterprise policy: approvedBundles entries require unique non-core package names, exact semantic versions, and lowercase SHA-256 digests')
     }
     names.add(fields.name)
-    return Object.freeze({ name: fields.name, version: fields.version })
+    return Object.freeze({ name: fields.name, version: fields.version, sha256: fields.sha256 })
   })
   return Object.freeze(bundles)
 }

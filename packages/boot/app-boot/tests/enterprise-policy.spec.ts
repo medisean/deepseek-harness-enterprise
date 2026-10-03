@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { bundlePatchPaths, composeEntries, enterprisePolicyPath, loadEnterprisePolicy, loadOverlayPatches,
   readProfilePatches, type Profile } from '../src/index.ts'
+import { hashEnterpriseBundleDirectory } from '../src/enterprise-bundle-integrity.ts'
 
 const windowsAcl = vi.hoisted(() => ({ check: vi.fn() }))
 vi.mock('../src/windows-policy-acl.ts', () => ({ assertWindowsPolicyAcl: windowsAcl.check }))
@@ -68,7 +69,7 @@ describe('managed Desktop policy', () => {
 
   it('accepts only unique exact versions for additional approved bundles', () => {
     const file = join(root, 'approved-bundles-policy.json')
-    const approvedBundles = [{ name: '@contoso/dsh-approved-plugin', version: '1.2.3-rc.1' }]
+    const approvedBundles = [{ name: '@contoso/dsh-approved-plugin', version: '1.2.3-rc.1', sha256: 'a'.repeat(64) }]
     writeFileSync(file, JSON.stringify({ ...policy, approvedBundles }))
     const parsed = loadEnterprisePolicy(file, 'win32')
     expect(parsed.approvedBundles).toEqual(approvedBundles)
@@ -80,12 +81,36 @@ describe('managed Desktop policy', () => {
       [{ name: '@contoso/dsh-approved-plugin', version: '1.2.3-' }],
       [{ name: '@deepseek-ai/dsh-base', version: '1.2.3' }],
       [{ name: '../plugin', version: '1.2.3' }],
-      [{ name: '@contoso/dsh-approved-plugin', version: '1.2.3', extra: true }],
+      [{ name: '@contoso/dsh-approved-plugin', version: '1.2.3', sha256: 'a'.repeat(64), extra: true }],
+      [{ name: '@contoso/dsh-approved-plugin', version: '1.2.3' }],
+      [{ name: '@contoso/dsh-approved-plugin', version: '1.2.3', sha256: 'A'.repeat(64) }],
       [approvedBundles[0], approvedBundles[0]],
     ]) {
       writeFileSync(file, JSON.stringify({ ...policy, approvedBundles: invalid }))
       expect(() => loadEnterprisePolicy(file, 'win32')).toThrow('approvedBundles')
     }
+  })
+
+  it('hashes bundle files deterministically and detects content changes', () => {
+    const directory = join(root, 'bundle-hash-fixture')
+    mkdirSync(join(directory, 'nested'), { recursive: true })
+    writeFileSync(join(directory, 'package.json'), '{"name":"fixture"}')
+    writeFileSync(join(directory, 'nested', 'entry.js'), 'export default 1')
+    const original = hashEnterpriseBundleDirectory(directory)
+    expect(hashEnterpriseBundleDirectory(directory)).toBe(original)
+    mkdirSync(join(directory, 'empty'))
+    expect(hashEnterpriseBundleDirectory(directory)).not.toBe(original)
+    rmSync(join(directory, 'empty'), { recursive: true })
+    writeFileSync(join(directory, 'nested', 'entry.js'), 'export default 2')
+    expect(hashEnterpriseBundleDirectory(directory)).not.toBe(original)
+  })
+
+  it.skipIf(process.platform === 'win32')('rejects bundle symlinks that resolve outside the protected installation', () => {
+    const directory = join(root, 'bundle-symlink-fixture')
+    mkdirSync(directory)
+    writeFileSync(join(root, 'outside.js'), 'export default 1')
+    symlinkSync('../outside.js', join(directory, 'entry.js'))
+    expect(() => hashEnterpriseBundleDirectory(directory)).toThrow('inside the protected installation')
   })
 
   it('checks Windows machine policy permissions before reading the file', () => {
@@ -172,7 +197,8 @@ describe('managed Desktop policy', () => {
       layers: [loadBundleLayer('@deepseek-ai/dsh-base', baseDir), loadBundleLayer('@deepseek-ai/dsh-web-app', webDir),
         { packageName: approvedName, packageDir: approvedDir, patchPaths: [], patches: [] }],
     }
-    const approvedPolicy = { ...policy, approvedBundles: [{ name: approvedName, version: '2.4.1' }] }
+    const approvedPolicy = { ...policy, approvedBundles: [{ name: approvedName, version: '2.4.1',
+      sha256: hashEnterpriseBundleDirectory(approvedDir, modules) }] }
     const context = { name: 'desktop', dir: root, patchPath: profile.patchPath, installAnchor, home: root,
       cwd: root, startedBundles: profile.layers.map(item => item.packageName), overlays: [],
       telemetryDisabledEnv: undefined, enterprisePolicy: approvedPolicy }
@@ -183,6 +209,10 @@ describe('managed Desktop policy', () => {
     writeFileSync(join(approvedDir, 'package.json'), JSON.stringify({ name: approvedName, version: '2.4.2' }))
     expect(() => readProfilePatches('test', context, profile)).toThrow('does not match its approved version')
     writeFileSync(join(approvedDir, 'package.json'), JSON.stringify({ name: approvedName, version: '2.4.1' }))
+
+    writeFileSync(join(approvedDir, 'tampered.js'), 'module.exports = true')
+    expect(() => readProfilePatches('test', context, profile)).toThrow('approved SHA-256 digest')
+    rmSync(join(approvedDir, 'tampered.js'))
 
     const userBundleDir = join(root, 'user-bundles', 'dsh-approved-plugin')
     mkdirSync(userBundleDir, { recursive: true })

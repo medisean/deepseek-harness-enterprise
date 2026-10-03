@@ -1,6 +1,7 @@
 /** Launcher-owned profile locations and composition inputs. */
 import { readFileSync, realpathSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { hashEnterpriseBundleDirectory } from './enterprise-bundle-integrity.ts'
 import { composeEntries, loadProfileDirectory, PROFILE_PATCH_FILENAME, type Profile } from './profile.ts'
 import { loadOptionalPatches } from './index.ts'
 import type { EnterprisePolicy } from './enterprise-policy.ts'
@@ -154,6 +155,12 @@ function assertEnterpriseBundles(
       || !('name' in manifest) || !('version' in manifest)
       || manifest.name !== approved.name || manifest.version !== approved.version) {
       throw new Error(`enterprise policy: installed bundle ${approved.name} does not match its approved version ${approved.version}`)
+    }
+    let digest: string
+    try { digest = hashEnterpriseBundleDirectory(packageDirectory, installationModules) }
+    catch { throw new Error(`enterprise policy: cannot verify installed bundle ${approved.name} integrity`) }
+    if (digest !== approved.sha256) {
+      throw new Error(`enterprise policy: installed bundle ${approved.name} does not match its approved SHA-256 digest`)
     }
   }
 }
