@@ -64,3 +64,16 @@ it('routes managed requests with OIDC and never falls back to the launching API 
   expect(headers.get('authorization')).toBe('Bearer managed-access-token')
   expect(headers.has('x-api-key')).toBe(false)
 })
+
+it('fails closed when managed OIDC has no access token or Host auth provider', async () => {
+  vi.stubEnv('DEEPSEEK_API_KEY', 'must-not-be-used')
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('unexpected request', { status: 503 }))
+  const ctx = new Context()
+  contexts.push(ctx)
+  ctx.provide('profileContext', managedProfile())
+  await ctx.plugin(LlmRuntime)
+  await ctx.plugin(ApiKey, { baseURL: 'https://provider.example.test/v1' })
+
+  await runOneRequest(ctx).catch(() => undefined)
+  expect(fetch).not.toHaveBeenCalled()
+})

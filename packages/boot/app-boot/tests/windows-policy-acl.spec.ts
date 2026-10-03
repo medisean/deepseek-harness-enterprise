@@ -40,6 +40,16 @@ it('does not expose PowerShell diagnostics when the ACL check fails', () => {
   expect(message).toBe('enterprise policy: Windows policy file and directory must be writable only by Administrators or SYSTEM')
 })
 
+it('uses the default hidden PowerShell runner and fails closed when inspection is unavailable', () => {
+  if (process.platform === 'win32') {
+    expect(() => assertWindowsPolicyAcl(file)).not.toThrow()
+  } else {
+    expect(() => assertWindowsPolicyAcl(file)).toThrow(
+      'enterprise policy: Windows policy file and directory must be writable only by Administrators or SYSTEM',
+    )
+  }
+})
+
 beforeAll(() => {
   if (process.platform !== 'win32') return
   writeFileSync(file, JSON.stringify(policy))

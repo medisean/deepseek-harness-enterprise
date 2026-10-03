@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
@@ -28,6 +29,7 @@ describe('managed Desktop policy', () => {
   it('uses machine paths and refuses absent, public, and malformed gateways', () => {
     expect(enterprisePolicyPath('darwin')).toContain('/Library/Application Support/')
     expect(enterprisePolicyPath('win32')).toContain('C:\\ProgramData\\')
+    expect(() => enterprisePolicyPath('linux')).toThrow('supports macOS and Windows only')
     const file = join(root, 'policy.json')
     expect(() => loadEnterprisePolicy(file, 'win32')).toThrow()
     for (const modelGateway of ['https://api.deepseek.com/anthropic', 'http://internal.test', 'https://good.test/?x=1']) {
@@ -38,6 +40,27 @@ describe('managed Desktop policy', () => {
     expect(() => loadEnterprisePolicy(file, 'win32')).toThrow('expected version 1')
     writeFileSync(file, JSON.stringify(policy))
     expect(loadEnterprisePolicy(file, 'win32')).toEqual(policy)
+  })
+
+  it('rejects non-object, malformed, and root-workspace policy files', () => {
+    const file = join(root, 'invalid-policy.json')
+    writeFileSync(file, '[]')
+    expect(() => loadEnterprisePolicy(file, 'win32')).toThrow('expected a JSON object')
+    writeFileSync(file, '{')
+    expect(() => loadEnterprisePolicy(file, 'win32')).toThrow()
+    for (const value of [
+      { ...policy, modelGateway: 'not a URL' },
+      { ...policy, modelGateway: 'https://user:pass@gateway.example.test' },
+      { ...policy, modelGateway: 'https://gateway.example.test/#fragment' },
+      { ...policy, workspaceMode: 'danger-full-access' },
+      { ...policy, workspaceRoot: 'relative/path' },
+      { ...policy, workspaceRoot: '/' },
+    ]) {
+      writeFileSync(file, JSON.stringify(value))
+      expect(() => loadEnterprisePolicy(file, 'win32')).toThrow()
+    }
+    writeFileSync(file, JSON.stringify({ ...policy, approvedBundles: [], oidc: undefined }))
+    expect(loadEnterprisePolicy(file, 'win32').approvedBundles).toBeUndefined()
   })
 
   it('accepts only public-client OIDC policy with a secure issuer and OpenID scope', () => {
@@ -51,12 +74,17 @@ describe('managed Desktop policy', () => {
       gatewayScope: 'model:run', scopes: ['openid', 'profile', 'model:run'], audience: 'api://model-gateway',
     })
     for (const oidc of [
+      null,
+      [],
       { issuer: 'http://login.example.test', clientId: 'desktop', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'api://model-gateway' },
       { issuer: 'https://login.example.test', clientId: 'desktop', gatewayScope: 'model:run', scopes: ['profile', 'model:run'], audience: 'api://model-gateway' },
       { issuer: 'https://login.example.test', clientId: 'desktop', gatewayScope: 'model:run', scopes: ['openid', 'openid', 'model:run'], audience: 'api://model-gateway' },
       { issuer: 'https://login.example.test', clientId: '', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'api://model-gateway' },
       { issuer: 'https://login.example.test', clientId: 'desktop', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'not a URI' },
       { issuer: 'https://login.example.test?tenant=1', clientId: 'desktop', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'api://model-gateway' },
+      { issuer: 'not a URL', clientId: 'desktop', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'api://model-gateway' },
+      { issuer: 'https://login.example.test', clientId: 'desktop', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'https://user:pass@gateway.example.test/' },
+      { issuer: 'https://login.example.test', clientId: 'desktop', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'https://gateway.example.test/#fragment' },
       { issuer: 'https://login.example.test', clientId: 'desktop', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'api://model-gateway', extra: true },
       { issuer: 'https://login.example.test', clientId: 'desktop', gatewayScope: 'model:run', scopes: ['openid', 'model:run'] },
       { issuer: 'https://login.example.test', clientId: 'desktop', gatewayScope: 'model:run', scopes: ['openid'], audience: 'api://model-gateway' },
@@ -76,6 +104,11 @@ describe('managed Desktop policy', () => {
     expect(Object.isFrozen(parsed.approvedBundles)).toBe(true)
     expect(Object.isFrozen(parsed.approvedBundles?.[0])).toBe(true)
     for (const invalid of [
+      null,
+      'not-an-array',
+      Array.from({ length: 65 }, (_, index) => ({
+        name: `plugin-${index}`, version: '1.2.3', sha256: 'a'.repeat(64),
+      })),
       [{ name: '@contoso/dsh-approved-plugin', version: '^1.2.3' }],
       [{ name: '@contoso/dsh-approved-plugin', version: '1.2' }],
       [{ name: '@contoso/dsh-approved-plugin', version: '1.2.3-' }],
@@ -88,6 +121,10 @@ describe('managed Desktop policy', () => {
     ]) {
       writeFileSync(file, JSON.stringify({ ...policy, approvedBundles: invalid }))
       expect(() => loadEnterprisePolicy(file, 'win32')).toThrow('approvedBundles')
+    }
+    for (const invalid of [[null], [[]]]) {
+      writeFileSync(file, JSON.stringify({ ...policy, approvedBundles: invalid }))
+      expect(() => loadEnterprisePolicy(file, 'win32')).toThrow('each approvedBundles entry')
     }
   })
 
@@ -105,6 +142,39 @@ describe('managed Desktop policy', () => {
     expect(hashEnterpriseBundleDirectory(directory)).not.toBe(original)
   })
 
+  it('rejects non-directory roots and hashes safe in-installation file and directory links', () => {
+    const installation = join(root, 'bundle-link-installation')
+    const directory = join(installation, 'bundle')
+    mkdirSync(join(directory, 'nested'), { recursive: true })
+    mkdirSync(join(installation, 'shared'), { recursive: true })
+    writeFileSync(join(directory, 'package.json'), '{}')
+    writeFileSync(join(installation, 'shared', 'entry.js'), 'export default 1')
+    writeFileSync(join(installation, 'shared', 'directory-marker'), 'inside')
+    symlinkSync(join(installation, 'shared', 'entry.js'), join(directory, 'file-link.js'))
+    symlinkSync(join(installation, 'shared'), join(directory, 'directory-link'))
+    expect(hashEnterpriseBundleDirectory(directory, installation)).toMatch(/^[a-f0-9]{64}$/u)
+    const file = join(installation, 'not-a-directory')
+    writeFileSync(file, 'file')
+    expect(() => hashEnterpriseBundleDirectory(file, installation)).toThrow('expected a directory')
+    expect(() => hashEnterpriseBundleDirectory(directory, join(installation, 'shared')))
+      .toThrow('must be inside the protected installation')
+  })
+
+  it.skipIf(process.platform === 'win32')('rejects links to special files inside the protected root', () => {
+    const directory = join(root, 'bundle-special-link')
+    mkdirSync(directory)
+    symlinkSync('/dev/null', join(directory, 'device-link'))
+    expect(() => hashEnterpriseBundleDirectory(directory, '/')).toThrow('symbolic links must resolve inside')
+  })
+
+  it.skipIf(process.platform === 'win32')('rejects a FIFO in the installed bundle tree', () => {
+    const directory = join(root, 'bundle-socket-fixture')
+    const fifoPath = join(directory, 'pipe')
+    mkdirSync(directory)
+    execFileSync('mkfifo', [fifoPath])
+    expect(() => hashEnterpriseBundleDirectory(directory)).toThrow('only regular files and directories are allowed')
+  })
+
   it.skipIf(process.platform === 'win32')('rejects bundle symlinks that resolve outside the protected installation', () => {
     const directory = join(root, 'bundle-symlink-fixture')
     mkdirSync(directory)
@@ -119,9 +189,27 @@ describe('managed Desktop policy', () => {
     expect(windowsAcl.check).toHaveBeenCalledWith(resolve(file))
   })
 
+  it.skipIf(process.platform === 'win32')('rejects non-root-owned macOS policy ancestors', () => {
+    const file = join(root, 'macos-policy.json')
+    writeFileSync(file, JSON.stringify(policy))
+    expect(() => loadEnterprisePolicy(file, 'darwin')).toThrow('must be root-owned')
+  })
+
   it.skipIf(process.platform !== 'darwin')('rejects a user-owned policy ancestry on macOS', () => {
     const file = join(root, 'policy.json')
     expect(() => loadEnterprisePolicy(file, 'darwin')).toThrow('root-owned')
+  })
+
+  it.skipIf(process.platform === 'win32')('walks to the filesystem root when checking a macOS policy path', () => {
+    expect(() => loadEnterprisePolicy('/', 'darwin')).toThrow()
+  })
+
+  it.skipIf(process.platform !== 'linux')('walks through trusted Linux system ancestors for the macOS policy check', () => {
+    expect(() => loadEnterprisePolicy('/proc/1/status', 'darwin')).toThrow()
+  })
+
+  it.skipIf(process.platform !== 'darwin')('walks from a trusted macOS system directory to the filesystem root', () => {
+    expect(() => loadEnterprisePolicy('/System', 'darwin')).toThrow()
   })
 
   it('refuses user layers and removes execution, network, and plugin controls from the final tree', () => {
@@ -221,5 +309,67 @@ describe('managed Desktop policy', () => {
       { packageName: approvedName, packageDir: userBundleDir, patchPaths: [], patches: [] }] }
     expect(() => readProfilePatches('test', context, userBundle))
       .toThrow('must come from the signed Desktop installation')
+  })
+
+  it('rejects unavailable, malformed, and escaping approved bundle contents', () => {
+    const baseDir = join(import.meta.dirname, '../../../bundle/base')
+    const webDir = join(import.meta.dirname, '../../../bundle/web-app')
+    const modules = join(root, 'signed-invalid', 'node_modules')
+    const installAnchor = join(modules, '@deepseek-ai', 'dsh', 'package.json')
+    const approvedName = '@contoso/dsh-invalid-plugin'
+    const approvedDir = join(modules, '@contoso', 'dsh-invalid-plugin')
+    mkdirSync(dirname(installAnchor), { recursive: true })
+    mkdirSync(approvedDir, { recursive: true })
+    writeFileSync(installAnchor, '{}')
+    writeFileSync(join(approvedDir, 'package.json'), JSON.stringify({ name: approvedName, version: '1.0.0' }))
+    const profile: Profile = {
+      name: 'desktop', dir: root, patchPath: join(root, 'missing-invalid.patch.yml'), patches: [], skippedBundles: [],
+      layers: [loadBundleLayer('@deepseek-ai/dsh-base', baseDir), loadBundleLayer('@deepseek-ai/dsh-web-app', webDir),
+        { packageName: approvedName, packageDir: approvedDir, patchPaths: [], patches: [] }],
+    }
+    const context = { name: 'desktop', dir: root, patchPath: profile.patchPath, installAnchor, home: root, cwd: root,
+      startedBundles: profile.layers.map(item => item.packageName), overlays: [], telemetryDisabledEnv: undefined,
+      enterprisePolicy: { ...policy, approvedBundles: [{ name: approvedName, version: '1.0.0', sha256: 'b'.repeat(64) }] } }
+    expect(() => readProfilePatches('test', context, profile)).toThrow('approved SHA-256 digest')
+
+    writeFileSync(join(approvedDir, 'package.json'), '[]')
+    expect(() => readProfilePatches('test', context, profile)).toThrow('does not match its approved version')
+    rmSync(join(approvedDir, 'package.json'))
+    expect(() => readProfilePatches('test', context, profile)).toThrow('is unavailable in the signed Desktop installation')
+
+    writeFileSync(join(approvedDir, 'package.json'), JSON.stringify({ name: approvedName, version: '1.0.0' }))
+    if (process.platform !== 'win32') {
+      writeFileSync(join(root, 'escaping-target.js'), 'export default 1')
+      symlinkSync(join(root, 'escaping-target.js'), join(approvedDir, 'escape.js'))
+      expect(() => readProfilePatches('test', context, profile)).toThrow('cannot verify installed bundle')
+    }
+  })
+
+  it('rejects an unresolved signed installation and sparse approved-bundle layers', () => {
+    const baseDir = join(import.meta.dirname, '../../../bundle/base')
+    const webDir = join(import.meta.dirname, '../../../bundle/web-app')
+    const approvedName = '@contoso/dsh-missing-plugin'
+    const approvedBundles = [{ name: approvedName, version: '1.0.0', sha256: 'a'.repeat(64) }]
+    const layers: Profile['layers'] = [
+      loadBundleLayer('@deepseek-ai/dsh-base', baseDir),
+      loadBundleLayer('@deepseek-ai/dsh-web-app', webDir),
+      { packageName: approvedName, packageDir: join(root, 'missing-approved'), patchPaths: [], patches: [] },
+    ]
+    const profile: Profile = { name: 'desktop', dir: root, patchPath: join(root, 'missing.patch.yml'),
+      patches: [], skippedBundles: [], layers }
+    const context = { name: 'desktop', dir: root, patchPath: profile.patchPath,
+      installAnchor: join(root, 'absent', 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
+      home: root, cwd: root, startedBundles: [], overlays: [], telemetryDisabledEnv: undefined,
+      enterprisePolicy: { ...policy, approvedBundles } }
+    expect(() => readProfilePatches('test', context, profile))
+      .toThrow('cannot resolve the signed Desktop installation bundle directory')
+    const modules = join(root, 'signed-sparse', 'node_modules')
+    const installAnchor = join(modules, '@deepseek-ai', 'dsh', 'package.json')
+    mkdirSync(dirname(installAnchor), { recursive: true })
+    writeFileSync(installAnchor, '{}')
+    const sparseLayers = [...profile.layers]
+    delete sparseLayers[2]
+    expect(() => readProfilePatches('test', { ...context, installAnchor }, { ...profile, layers: sparseLayers }))
+      .toThrow('approved bundle is missing from the Desktop profile')
   })
 })
