@@ -12,21 +12,21 @@ env:
   DSH_TELEMETRY_DISABLED: '1'
 
 # Cancel a superseded pull-request run on a new push so a fresh head does not
-# queue a second full 9-job run behind a stale one (paid enterprise runners
-# would otherwise stack with no auto-cancellation).
+# queue a second full 9-job run behind a stale one.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
 
-  # Three enterprise jobs isolate coverage, static analysis, and the
-  # build-backed consumer tail. The consumer job owns the only Linux build so
-  # all three jobs enter runner allocation independently.
+  # Three Linux jobs isolate coverage, static analysis, and the build-backed
+  # consumer tail. Standard GitHub-hosted runners are the default; the consumer
+  # job owns the only Linux build so all three jobs enter runner allocation
+  # independently.
   #
-  # FAILOVER (Linux): each Linux enterprise job resolves its pool through the
+  # FAILOVER (Linux): each Linux job resolves its pool through the
   # DSH_CI_FAILOVER_LINUX repository variable. Unset (normal), the expressions
-  # pick the hosted enterprise pools below. Setting the variable to
+  # pick standard GitHub-hosted runners below. Setting the variable to
   # 'selfhosted' (repo Settings → Actions → Variables; writer-manageable
   # repository state — not PR-editable, no merge required) retargets eligible
   # same-repository, non-fork, non-Dependabot PRs onto the in-house vm-backup
@@ -48,13 +48,13 @@ jobs:
           && github.event.pull_request.head.repo.fork == false
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
-          || 'dsh-ubuntu-24-04-16core' }}
+          || 'ubuntu-24.04' }}
     name: node 24 / static
     env:
       # Shared hosts expose host CPUs, not an isolated allocation.
       DSH_GATE_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.repo.fork == false && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
       # Stop the aggregate at the first blocking gate failure so a red run
-      # does not keep burning enterprise runner time on the remaining gates.
+      # does not keep consuming runner time on the remaining gates.
       DSH_GATE_FAIL_FAST: '1'
     steps:
       # Runner cleanup owns tool caches and fixtures, including cancelled runs.
@@ -118,7 +118,7 @@ jobs:
           && github.event.pull_request.head.repo.fork == false
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
-          || 'dsh-ubuntu-24-04-16core' }}
+          || 'ubuntu-24.04' }}
     name: node 24 / coverage
     env:
       # Shared hosts expose host CPUs, not an isolated allocation.
@@ -249,7 +249,7 @@ jobs:
           && github.event.pull_request.head.repo.fork == false
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
-          || 'dsh-ubuntu-24-04-16core' }}
+          || 'ubuntu-24.04' }}
     name: node 24 / snapshots and artifacts
     env:
       # Shared hosts expose host CPUs, not an isolated allocation.
@@ -515,7 +515,7 @@ jobs:
           && github.event.pull_request.head.repo.fork == false
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "dsh-win-ci", "windows"]')
-          || 'dsh-windows-2025-16core' }}
+          || 'windows-2025' }}
     name: windows node 24 / build & observational
     timeout-minutes: 60
     env:
@@ -579,7 +579,7 @@ jobs:
           && github.event.pull_request.head.repo.fork == false
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "dsh-win-ci", "windows"]')
-          || 'dsh-windows-2025-16core' }}
+          || 'windows-2025' }}
     name: windows node 24 / coverage
     timeout-minutes: 120
     env:
@@ -659,7 +659,7 @@ jobs:
           && github.event.pull_request.head.repo.fork == false
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "dsh-win-ci", "windows"]')
-          || 'dsh-windows-2025-16core' }}
+          || 'windows-2025' }}
     name: windows node 24 / native tests
     timeout-minutes: 60
     steps:
