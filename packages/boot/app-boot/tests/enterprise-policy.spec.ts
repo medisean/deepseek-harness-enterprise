@@ -367,8 +367,8 @@ describe('managed Desktop policy', () => {
     const installAnchor = join(modules, '@deepseek-ai', 'dsh', 'package.json')
     mkdirSync(dirname(installAnchor), { recursive: true })
     writeFileSync(installAnchor, '{}')
-    const sparseLayers = [...profile.layers]
-    delete sparseLayers[2]
+    const sparseLayers = [...profile.layers.slice(0, 2)]
+    sparseLayers.length = 3
     expect(() => readProfilePatches('test', { ...context, installAnchor }, { ...profile, layers: sparseLayers }))
       .toThrow('approved bundle is missing from the Desktop profile')
   })
