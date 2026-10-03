@@ -33,9 +33,16 @@ beforeAll(() => {
   if (process.platform !== 'win32') return
   writeFileSync(file, JSON.stringify({ version: 1, modelGateway: 'https://gateway.example.test/anthropic',
     workspaceMode: 'read-only', workspaceRoot: root }))
-  execFileSync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-    '-File', join(import.meta.dirname, '../../../../deploy/enterprise/Secure-Policy.ps1'), '-PolicyPath', file],
-  { stdio: 'ignore', windowsHide: true })
+  try {
+    execFileSync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+      '-File', join(import.meta.dirname, '../../../../deploy/enterprise/Secure-Policy.ps1'), '-PolicyPath', file],
+    { windowsHide: true, timeout: 15_000 })
+  } catch (error) {
+    const diagnostic = error instanceof Error && 'stderr' in error && error.stderr instanceof Buffer
+      ? error.stderr.toString('utf8').trim()
+      : error instanceof Error ? error.message : String(error)
+    throw new Error(`Windows policy ACL fixture setup failed: ${diagnostic}`)
+  }
 })
 afterAll(() => { rmSync(root, { recursive: true, force: true }) })
 
