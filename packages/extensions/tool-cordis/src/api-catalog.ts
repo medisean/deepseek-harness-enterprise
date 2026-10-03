@@ -5169,8 +5169,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface EncodedImageAttachment {\n    mediaType: ImageMediaType;\n    data: string;\n    name?: string;\n}',
   },
   {
+    name: 'EnterpriseApprovedBundle',
+    declaration: 'export interface EnterpriseApprovedBundle {\n    readonly name: string;\n    readonly version: string;\n}',
+  },
+  {
+    name: 'EnterpriseOidcPolicy',
+    declaration: 'export interface EnterpriseOidcPolicy {\n    readonly issuer: string;\n    readonly clientId: string;\n    readonly gatewayScope: string;\n    readonly scopes: readonly string[];\n    readonly audience: string;\n}',
+  },
+  {
     name: 'EnterprisePolicy',
-    declaration: 'export interface EnterprisePolicy {\n    readonly version: 1;\n    readonly modelGateway: string;\n    readonly workspaceMode: \'read-only\' | \'workspace-write\';\n    readonly workspaceRoot: string;\n}',
+    declaration: 'export interface EnterprisePolicy {\n    readonly version: 1;\n    readonly modelGateway: string;\n    readonly workspaceMode: \'read-only\' | \'workspace-write\';\n    readonly workspaceRoot: string;\n    readonly approvedBundles?: readonly EnterpriseApprovedBundle[];\n    readonly oidc?: EnterpriseOidcPolicy;\n}',
   },
   {
     name: 'EpochHeader',

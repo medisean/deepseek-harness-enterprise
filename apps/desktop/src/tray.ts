@@ -12,6 +12,8 @@ export interface DesktopTrayOptions {
   readonly open: () => void
   /** Request quit through the same confirmation as every other quit entry. */
   readonly quit: () => void
+  /** End the managed OIDC session when enterprise sign-in is configured. */
+  readonly signOut?: () => void
 }
 
 /** Tray icon present for the whole run, not only while the window is hidden. */
@@ -34,6 +36,10 @@ export class DesktopTray {
     tray.setToolTip(messages.aboutProduct)
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: messages.openApplication, click: () => { this.options.open() } },
+      ...(this.options.signOut === undefined ? [] : [
+        { type: 'separator' as const },
+        { label: messages.enterpriseSsoSignOutMenu, click: () => { this.options.signOut?.() } },
+      ]),
       { type: 'separator' },
       { label: messages.quitApplication, click: () => { this.options.quit() } },
     ]))

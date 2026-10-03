@@ -7,6 +7,7 @@ import type {} from '@deepseek-ai/dsh-app-boot'
 import { registerDeepSeekProvider, catalogModelInfo } from '@deepseek-ai/dsh-llm-deepseek'
 import { Config, plainOptions, resolveEnterpriseAdapterOptions } from './config.ts'
 import type { ResolvedDeepSeekOptions } from './config.ts'
+import { resolveProviderAuth } from './auth.ts'
 
 export { Config, plainOptions, resolveAdapterOptions } from './config.ts'
 export type { Options, ResolvedDeepSeekOptions } from './config.ts'
@@ -42,7 +43,11 @@ export function apply(ctx: Context, config: Config): void {
   ])
   registerDeepSeekProvider(ctx, PROVIDER, {
     options, providerName: 'DeepSeek',
-    resolveAuth: async connection => ({ headers: { 'x-api-key': await resolveApiKey(connection) } }),
+    resolveAuth: async connection => resolveProviderAuth(
+      ctx.get('profileContext')?.enterprisePolicy?.oidc !== undefined,
+      () => ctx.enterpriseAuth?.getAccessToken() ?? Promise.resolve(undefined),
+      () => resolveApiKey(connection),
+    ),
     discoverModels: (provider) => {
       const connection = options()
       return Promise.resolve(connection.models.map(model => catalogModelInfo(provider, model)))

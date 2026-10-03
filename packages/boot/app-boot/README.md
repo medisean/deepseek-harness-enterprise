@@ -26,7 +26,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-The managed Desktop launcher supplies a machine policy before boot. Its profile composition rejects user patches and bundles outside the shipped Desktop pair, then applies the policy after all permitted layers.
+The managed Desktop launcher supplies a machine policy before boot. Its profile composition rejects user patches and bundles outside the shipped Desktop pair unless the machine policy lists an exact package name and version in `approvedBundles`; every approved bundle must resolve inside the signed, read-only Desktop installation. An OIDC policy also supplies an optional `ctx.enterpriseAuth` callback that returns a current gateway access token on demand; the callback is absent when the machine policy does not configure SSO.
 
 Starting an app with this package is a small, explicit entry point: you give it a config file and it runs the whole boot. This section covers what you can do and what you get; the helper calls behind each outcome are documented in the folded implementation section.
 

@@ -26,7 +26,7 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用本包
 
-受管 Desktop 启动器在加载插件前提供机器级策略。其 profile 组合拒绝用户补丁和非随附的 Desktop bundle，并在允许的配置层之后应用策略。
+受管 Desktop 启动器在加载插件前提供机器级策略。其 profile 组合拒绝用户补丁和非随附的 Desktop bundle，除非机器策略在 `approvedBundles` 中列出精确包名和版本；每个批准的 bundle 都必须解析自签名且只读的 Desktop 安装目录。OIDC 策略还会提供可选的 `ctx.enterpriseAuth` 回调，按需返回当前网关访问令牌；机器策略未配置 SSO 时不会提供此回调。
 
 用此包启动应用是一个小而显式的入口：你给它一个配置文件，它运行整个启动过程。本节说明你能做什么、能得到什么；每个结果背后的 helper 调用记录在下方可折叠的实现章节中。
 

@@ -23,6 +23,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   const [attempt, setAttempt] = useState<AccountView['attempt']>(null)
   const attemptRef = useRef<AccountView['attempt']>(null)
   const [starting, setStarting] = useState(false)
+  const [enterpriseFailed, setEnterpriseFailed] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState<{ status: 'idle' | 'busy' | 'copied' | 'failed' }>({ status: 'idle' })
   const copyState = copyFeedback.status
@@ -41,6 +42,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     setPage(next)
   }
   function showAccount(state: AccountView) {
+    if (api.enterpriseSso) return
     if (pageRef.current === 'key' || (state.attempt === null && pageRef.current === 'entry')) return
     attemptRef.current = state.attempt
     setAttempt(state.attempt)
@@ -61,7 +63,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
       })
     }
     takeNotice()
-    const stop = api.onAccountState((state) => {
+    const stop = api.enterpriseSso ? () => {} : api.onAccountState((state) => {
       revision.current++
       takeNotice()
       showAccount(state)
@@ -128,9 +130,17 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   async function start() {
     navigate('account')
     setStarting(true)
+    setEnterpriseFailed(false)
     setAttempt(null)
     attemptRef.current = null
     const current = ++revision.current
+    if (api.enterpriseSso) {
+      try { await api.startEnterpriseSignIn() }
+      catch {
+        if (mounted.current && revision.current === current) { setStarting(false); setEnterpriseFailed(true) }
+      }
+      return
+    }
     try {
       const state = await api.startSignIn()
       if (mounted.current && revision.current === current) showAccount(state)
@@ -139,6 +149,20 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     }
   }
   async function cancel() {
+    if (api.enterpriseSso) {
+      if (cancelling) return
+      setCancelling(true)
+      const current = ++revision.current
+      try {
+        await api.cancelEnterpriseSignIn()
+        if (mounted.current && revision.current === current) { setStarting(false); navigate('entry') }
+      } catch {
+        if (mounted.current && revision.current === current) setEnterpriseFailed(true)
+      } finally {
+        if (mounted.current) setCancelling(false)
+      }
+      return
+    }
     if (cancelling || attemptRef.current === null) return
     setCancelling(true)
     const current = ++revision.current
@@ -165,10 +189,12 @@ export function Welcome({ api }: { api: WelcomeApi }) {
 
   const phase = starting ? 'initializing' : attempt?.phase ?? 'failed'
   const waiting = phase === 'waiting-browser'
-  const failed = phase === 'expired' || phase === 'failed'
-  const title = phase === 'initializing' ? m.welcomeAuthStarting
-    : waiting ? m.welcomeAuthWaiting : phase === 'expired' ? m.welcomeAuthExpired
-      : phase === 'failed' ? m.welcomeAuthFailed : m.welcomeAuthExchanging
+  const failed = api.enterpriseSso ? enterpriseFailed : phase === 'expired' || phase === 'failed'
+  const enterpriseWaiting = api.enterpriseSso && page === 'account' && starting
+  const title = api.enterpriseSso && page === 'account' ? enterpriseFailed ? m.welcomeSsoFailed : m.welcomeSsoWaiting
+    : phase === 'initializing' ? m.welcomeAuthStarting
+      : waiting ? m.welcomeAuthWaiting : phase === 'expired' ? m.welcomeAuthExpired
+        : phase === 'failed' ? m.welcomeAuthFailed : m.welcomeAuthExchanging
   const heading = page === 'entry' ? 'welcome-heading' : page === 'key' ? 'key-title' : 'auth-status'
 
   return <>
@@ -193,24 +219,31 @@ export function Welcome({ api }: { api: WelcomeApi }) {
       <section id="auth-page" className={`key-heading ${waiting ? 'auth-waiting' : phase === 'expired' ? 'auth-expired' : ''}`}
         hidden={page !== 'account'} aria-live="polite">
         <h1 id="auth-status">{title}</h1>
-        <p id="auth-description" hidden={!waiting && phase !== 'expired'}>{waiting ? m.welcomeAuthWaitingDescription : m.welcomeAuthExpiredDescription}</p>
+        <p id="auth-description" hidden={!waiting && phase !== 'expired' && !enterpriseWaiting}>
+          {enterpriseWaiting ? m.welcomeSsoWaitingDescription : waiting ? m.welcomeAuthWaitingDescription : m.welcomeAuthExpiredDescription}
+        </p>
         <button id="auth-copy" className="copy-link" type="button" hidden={!waiting} disabled={!waiting || (copyState === 'busy' || copyState === 'copied')} onClick={() => { void copyLink() }}>
           {copyState === 'copied' ? m.welcomeAuthCopied : copyState === 'failed' ? m.welcomeAuthCopyFailed : m.welcomeAuthCopyLink}
         </button>
       </section>
       <div id="auth-actions" className="actions" hidden={page !== 'account'}>
-        <button id="auth-loading" className="primary" type="button" hidden={failed} disabled aria-label={m.welcomeAuthExchanging}>
+        <button id="auth-loading" className="primary" type="button" hidden={failed} disabled
+          aria-label={api.enterpriseSso ? m.welcomeSsoWaiting : m.welcomeAuthExchanging}>
           <StateDot state="ongoing" size={16} className="welcome-loading" />
         </button>
         <button id="auth-retry" className="primary" type="button" hidden={!failed} onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'sign_in' }); void start() }}>{m.welcomeAuthRetry}</button>
-        <button id="auth-api-key" className="secondary" type="button" hidden={!failed} onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'api-key' }); navigate('key') }}>{m.welcomeApiKey}</button>
+        <button id="auth-api-key" className="secondary" type="button" hidden={!failed || api.enterpriseSso} onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'api-key' }); navigate('key') }}>{m.welcomeApiKey}</button>
         <button id="auth-cancel" className="secondary" type="button" hidden={failed}
-          disabled={cancelling || phase === 'committing' || phase === 'succeeded' || (phase === 'initializing' && !attempt?.id)}
+          disabled={cancelling || (!api.enterpriseSso
+            && (phase === 'committing' || phase === 'succeeded' || (phase === 'initializing' && !attempt?.id)))}
           onClick={() => { void cancel() }}>{m.welcomeAuthCancel}</button>
       </div>
       <div id="entry-actions" className="actions" hidden={page !== 'entry'}>
-        <button id="sign-in" className="primary" type="button" onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'sign_in' }); void start() }}>{m.welcomeSignIn}</button>
-        <button ref={keyButton} id="api-key" className="secondary" type="button" onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'api-key' }); navigate('key') }}>{m.welcomeApiKey}</button>
+        <button id="sign-in" className="primary" type="button" onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'sign_in' }); void start() }}>
+          {api.enterpriseSso ? m.welcomeSsoSignIn : m.welcomeSignIn}
+        </button>
+        <button ref={keyButton} id="api-key" className="secondary" type="button" hidden={api.enterpriseSso}
+          onClick={() => { void api.analytics?.('auth_page_click', { button_name: 'api-key' }); navigate('key') }}>{m.welcomeApiKey}</button>
       </div>
       <div id="key-actions" className="actions" hidden={page !== 'key'}>
         <button id="save-key" className="primary" type="submit" form="key-form" disabled={busy || draft.trim() === ''}>{m.welcomeKeySave}</button>

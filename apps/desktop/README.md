@@ -231,6 +231,22 @@ pnpm run package:desktop:win:x64
 
 The macOS arm64 command requires Apple Silicon. The macOS x64 command runs on Intel macOS or Apple Silicon with Rosetta. The Windows x64 command requires Windows x64. Linux is not a supported Desktop release target.
 
+For an organization-wide Windows installation, build the separately named, signed per-machine installer on Windows x64:
+
+```sh
+pnpm run package:desktop:win:x64:enterprise
+```
+
+It writes to `apps/desktop/.desktop-build/targets/win-x64/enterprise-artifacts/`, requires administrator privileges at install time, and disables the Desktop auto-update feed so IT controls rollout. Deploy it silently with the enterprise software manager using NSIS `/S`. Remove a per-user installation before switching the same Windows account to the machine-wide build. The standard `package:desktop:win:x64` command remains per-user.
+
+For an organization-wide Windows installation, build the separately named, signed per-machine installer on Windows x64:
+
+```sh
+pnpm run package:desktop:win:x64:enterprise
+```
+
+It writes to `apps/desktop/.desktop-build/targets/win-x64/enterprise-artifacts/`, requires administrator privileges at install time, and disables the Desktop auto-update feed so IT controls rollout. Deploy it silently with the enterprise software manager using NSIS `/S`. Remove a per-user installation before switching the same Windows account to the machine-wide build. The standard `package:desktop:win:x64` command remains per-user.
+
 Each target owns its packed package inputs, prepared runtime, package set, dsh tree, pnpm preparation state, unpacked application, update metadata, and final artifacts under `apps/desktop/.desktop-build/targets/<target>/`. The Electron archive cache remains shared under `.desktop-build/downloads` because every archive name includes its version, platform, and architecture and is verified before extraction. A target build never consumes another target's mutable preparation state.
 
 ### Runtime file selection

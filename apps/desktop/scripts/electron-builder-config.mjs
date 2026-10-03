@@ -60,6 +60,14 @@ export function createElectronBuilderConfig(
   }
   const unsigned = env.DSH_DESKTOP_UNSIGNED === '1'
   if (unsigned && resolvedPlatform !== 'win32') throw new Error('desktop package: unsigned builds require Windows')
+  if (env.DSH_DESKTOP_ENTERPRISE_INSTALLER !== undefined
+    && !['0', '1'].includes(env.DSH_DESKTOP_ENTERPRISE_INSTALLER)) {
+    throw new Error('desktop package: DSH_DESKTOP_ENTERPRISE_INSTALLER must be 0 or 1')
+  }
+  const enterpriseInstaller = env.DSH_DESKTOP_ENTERPRISE_INSTALLER === '1'
+  if (enterpriseInstaller && resolvedPlatform !== 'win32') {
+    throw new Error('desktop package: enterprise machine-wide installer requires Windows')
+  }
   const packagesMacOS = targetPlatform === 'darwin' || (targetPlatform === undefined && hostPlatform === 'darwin')
   const packagesWindows = resolvedPlatform === 'win32'
   if (resolvedPlatform === 'win32') installWindowsDirectoryInstaller()
@@ -90,7 +98,7 @@ export function createElectronBuilderConfig(
   if (windowsSigner !== undefined) {
     installWindowsNsisBootstrapSigner({ sign: windowsSigner })
   }
-  const update = unsigned ? undefined : resolveDesktopAutoUpdateConfig(env, resolvedPlatform, resolvedArch)
+  const update = unsigned || enterpriseInstaller ? undefined : resolveDesktopAutoUpdateConfig(env, resolvedPlatform, resolvedArch)
   if (preparedRuntime !== undefined) buildPaths.dsh = preparedRuntime
   // electron-builder merges extraMetadata into the packaged manifest, so a build version here reaches
   // the artifact names, the update feed, and the installed app.getVersion() the updater compares against.
@@ -107,9 +115,9 @@ export function createElectronBuilderConfig(
       ...packaged === undefined ? {} : { dshBuildCommit: packaged.commit, dshBuildDirty: packaged.dirty },
     },
     productName: 'DeepSeek Harness',
-    // Unsigned builds carry their own suffix so a shared file can never pass for a release artifact.
-    artifactName: `deepseek-harness-\${version}-\${os}-\${arch}${unsigned ? '-unsigned' : ''}.\${ext}`,
-    directories: { output: unsigned ? buildPaths.unsignedArtifacts : buildPaths.artifacts },
+    // Managed and unsigned builds carry distinct names and output roots.
+    artifactName: `deepseek-harness-\${version}-\${os}-\${arch}${enterpriseInstaller ? '-enterprise' : ''}${unsigned ? '-unsigned' : ''}.\${ext}`,
+    directories: { output: enterpriseInstaller ? buildPaths.enterpriseArtifacts : unsigned ? buildPaths.unsignedArtifacts : buildPaths.artifacts },
     asar: true,
     electronDist: buildPaths.electron,
     electronFuses: { runAsNode: true },
@@ -237,10 +245,10 @@ export function createElectronBuilderConfig(
     nsis: {
       installerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),
       uninstallerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),
-      include: fileURLToPath(new URL('./installer.nsh', import.meta.url)),
+      include: fileURLToPath(new URL(enterpriseInstaller ? './installer-enterprise.nsh' : './installer.nsh', import.meta.url)),
       oneClick: false,
-      perMachine: false,
-      allowElevation: false,
+      perMachine: enterpriseInstaller,
+      allowElevation: enterpriseInstaller,
       allowToChangeInstallationDirectory: false,
       installerLanguages: ['en_US', 'zh_CN'],
       differentialPackage: true,

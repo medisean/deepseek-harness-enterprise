@@ -4,6 +4,9 @@
 !define /ifndef INSTALLER_BUILD_DIR "${__FILEDIR__}\..\.desktop-build\targets\win-x64\installer-ui"
 
 ManifestDPIAware true
+!ifndef DSH_INSTALL_REGISTRY_ROOT
+  !define DSH_INSTALL_REGISTRY_ROOT HKCU
+!endif
 !ifndef BUILD_UNINSTALLER
   !define MUI_CUSTOMFUNCTION_GUIINIT InstallerGuiInit
 !endif
@@ -30,6 +33,9 @@ ManifestDPIAware true
 !macroend
 
 !macro customInit
+  !ifdef DSH_ENTERPRISE_PER_MACHINE
+    ; electron-builder fixes install mode to all users and selects the Program Files directory.
+  !else
   ${If} ${isForAllUsers}
     MessageBox MB_OK|MB_ICONEXCLAMATION "$(INSTALLER_PER_USER)" /SD IDOK
     SetErrorLevel 2
@@ -44,6 +50,7 @@ ManifestDPIAware true
   !insertmacro setInstallModePerUser
   StrCpy $hasPerMachineInstallation 0
   StrCpy $hasPerUserInstallation 1
+  !endif
   StrCpy $InstallerPath $INSTDIR
   StrCpy $InstallerTheme "auto"
   ${GetParameters} $0
@@ -78,8 +85,13 @@ ManifestDPIAware true
 
 !macro customInstallMode
   ; Preserve the directory selected on the custom welcome page.
+  !ifdef DSH_ENTERPRISE_PER_MACHINE
+  StrCpy $installMode all
+  SetShellVarContext all
+  !else
   StrCpy $installMode CurrentUser
   SetShellVarContext current
+  !endif
   Abort
 !macroend
 

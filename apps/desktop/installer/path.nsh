@@ -123,7 +123,7 @@ Function InstallerPreflight
         Return
     ${EndIf}
     StrCpy $INSTDIR $InstallerPath
-    ReadRegStr $0 HKCU "${INSTALL_REGISTRY_KEY}" "InstallLocation"
+    ReadRegStr $0 ${DSH_INSTALL_REGISTRY_ROOT} "${INSTALL_REGISTRY_KEY}" "InstallLocation"
     ${If} $0 != $INSTDIR
     ${OrIfNot} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
         FindFirst $0 $1 "$INSTDIR\*.*"

@@ -32,7 +32,7 @@ jobs:
           sudo chown root:wheel "$(dirname "$policy")"
           sudo chmod 755 "$(dirname "$policy")"
           sudo tee "$policy" >/dev/null <<EOF
-          {"version":1,"modelGateway":"https://gateway.example.test/anthropic","workspaceMode":"read-only","workspaceRoot":"$workspace"}
+          {"version":1,"modelGateway":"https://gateway.example.test/anthropic","workspaceMode":"read-only","workspaceRoot":"$workspace","oidc":{"issuer":"https://id.example.test/tenant","clientId":"desktop-test","gatewayScope":"model:run","scopes":["openid","profile","offline_access","model:run"],"audience":"https://gateway.example.test/"}}
           EOF
           sudo bash deploy/enterprise/secure-policy-macos.sh
           test "$(stat -f '%u %Lp' "$policy")" = '0 644'
@@ -45,7 +45,43 @@ jobs:
           packages/boot/app-boot/tests/windows-policy-acl.spec.ts
           packages/sandbox/sandbox-policy/tests/policy.spec.ts
           packages/llm/llm-deepseek-api-key/tests/enterprise-gateway.spec.ts
+          apps/enterprise-gateway/tests/enterprise-gateway.spec.ts
           apps/cli/tests/enterprise-cli.spec.ts
+          apps/desktop/tests/enterprise-oidc.spec.ts
       - name: Desktop startup regression
         if: runner.os == 'macOS'
         run: pnpm exec vitest run apps/desktop/tests/main-startup.spec.ts
+      - name: Build and exercise the machine-wide NSIS installer
+        if: runner.os == 'Windows'
+        run: pnpm --dir apps/desktop run test:installer -- --enterprise
+
+  enterprise-gateway-container:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7.4.3-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Validate Compose deployment
+        env:
+          OIDC_ISSUER: https://id.example.test/tenant
+          OIDC_JWKS_URL: https://id.example.test/keys
+          OIDC_AUDIENCE: https://gateway.example.test/
+          MODEL_ALLOWLIST: deepseek-chat,deepseek-reasoner
+          DEEPSEEK_UPSTREAM_BASE_URL: https://inference.example.test/anthropic
+        run: docker compose --file deploy/enterprise/gateway/compose.yaml config --quiet
+      - name: Verify shared Redis concurrency limits
+        env:
+          REDIS_URL: redis://127.0.0.1:6379/0
+        run: pnpm exec vitest run apps/enterprise-gateway/tests/redis-quota.integration.spec.ts
+      - name: Build enterprise gateway image
+        run: docker build --file apps/enterprise-gateway/Dockerfile --tag deepseek-harness-enterprise-gateway:ci .

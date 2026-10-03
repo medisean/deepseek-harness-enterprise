@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.0-rc.2/managed-desktop-policy/guide.md
 /:
-  en: 395fe9bf5f65eb94
-  zh: 7e4ea03f38b80c64
+  en: 5ae641d5f2da46d4
+  zh: cc1c9e87f5b26552
 /configure-the-managed-desktop-policy:
   en: e8e66aff0719a676
   zh: ec2ec0f7b88789b4
 /configure-the-managed-desktop-policy/change:
-  en: 14b0152e5217ff89
-  zh: d0697743ce0e7313
+  en: d86801ae1a31f8de
+  zh: 5408c006ba8dafbb
 /configure-the-managed-desktop-policy/migration:
-  en: cf15c7f8833340a3
-  zh: 06d966095a3c27e8
+  en: bb416d9c3648b574
+  zh: a0057d9138a9a902

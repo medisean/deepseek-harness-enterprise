@@ -27,12 +27,14 @@ vi.mock('electron', () => ({
 
 afterEach(() => { native.trays.length = 0; native.menus.length = 0; vi.clearAllMocks() })
 
-function setup(locale = 'en') {
+function setup(locale = 'en', enterpriseSso = false) {
   let current = resolveDesktopLocale(locale)
   const open = vi.fn()
   const quit = vi.fn()
-  const tray = new DesktopTray({ iconPath: 'C:/app/resources/tray.ico', locale: () => current, open, quit })
-  return { tray, open, quit, native: native.trays[0]!, setLocale: (next: string) => { current = resolveDesktopLocale(next) } }
+  const signOut = vi.fn()
+  const tray = new DesktopTray({ iconPath: 'C:/app/resources/tray.ico', locale: () => current, open, quit,
+    ...(enterpriseSso ? { signOut } : {}) })
+  return { tray, open, quit, signOut, native: native.trays[0]!, setLocale: (next: string) => { current = resolveDesktopLocale(next) } }
 }
 
 function labels(menu: MenuItemConstructorOptions[]): (string | undefined)[] {
@@ -57,6 +59,16 @@ it('opens the window on a single click and routes menu entries to the open and q
   ;(menu[2] as { click: () => void }).click()
   expect(f.open).toHaveBeenCalledTimes(2)
   expect(f.quit).toHaveBeenCalledOnce()
+})
+
+it('adds a localized sign-out action only for managed SSO sessions', () => {
+  const f = setup('en', true)
+  expect(labels(native.menus[0]!)).toEqual(['Open DeepSeek Harness', 'separator', 'Sign out of organization account', 'separator', 'Quit DeepSeek Harness'])
+  ;(native.menus[0]![2] as { click: () => void }).click()
+  expect(f.signOut).toHaveBeenCalledOnce()
+  f.setLocale('zh')
+  f.tray.relabel()
+  expect(labels(native.menus[1]!)).toEqual(['打开 DeepSeek Harness', 'separator', '退出企业账号', 'separator', '退出 DeepSeek Harness'])
 })
 
 it('relabels the menu in the current locale and ignores relabel after disposal', () => {

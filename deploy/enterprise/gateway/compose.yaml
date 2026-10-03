@@ -1,0 +1,78 @@
+services:
+  model-gateway:
+    build:
+      context: ../../..
+      dockerfile: apps/enterprise-gateway/Dockerfile
+    image: deepseek-harness-enterprise-gateway:0.2.0-rc.2
+    restart: unless-stopped
+    init: true
+    group_add:
+      - "0"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 2
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      OIDC_ISSUER: ${OIDC_ISSUER:?Set the exact HTTPS issuer URL}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:?Set the HTTPS JWKS URL}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:?Set the gateway audience URI}
+      OIDC_REQUIRED_SCOPE: ${OIDC_REQUIRED_SCOPE:-model:run}
+      OIDC_TENANT_CLAIM: ${OIDC_TENANT_CLAIM:-tenant_id}
+      TENANT_POLICY_FILE: /run/config/tenants.json
+      REDIS_URL: ${REDIS_URL:-redis://quota-store:6379/0}
+      GATEWAY_PATH_PREFIX: /anthropic
+      MODEL_ALLOWLIST: ${MODEL_ALLOWLIST:?Set a comma-separated model allowlist}
+      DEEPSEEK_UPSTREAM_BASE_URL: ${DEEPSEEK_UPSTREAM_BASE_URL:?Set the explicitly approved HTTPS model upstream}
+      DEEPSEEK_API_KEY_FILE: /run/secrets/deepseek_api_key
+      MAX_REQUEST_BYTES: ${MAX_REQUEST_BYTES:-16777216}
+      MAX_CONCURRENT_REQUESTS_PER_SUBJECT: ${MAX_CONCURRENT_REQUESTS_PER_SUBJECT:-4}
+      UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-120000}
+    secrets:
+      - deepseek_api_key
+    volumes:
+      - ./tenants.json:/run/config/tenants.json:ro
+    depends_on:
+      quota-store:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  quota-store:
+    image: redis:7.4.3-alpine
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 1
+    command: ["redis-server", "--save", "", "--appendonly", "yes", "--appendfsync", "always", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - quota-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+secrets:
+  deepseek_api_key:
+    file: ./secrets/deepseek_api_key
+
+volumes:
+  quota-data:

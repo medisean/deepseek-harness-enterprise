@@ -1,5 +1,6 @@
 /** Launcher-owned profile locations and composition inputs. */
-import { join } from 'node:path'
+import { readFileSync, realpathSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { composeEntries, loadProfileDirectory, PROFILE_PATCH_FILENAME, type Profile } from './profile.ts'
 import { loadOptionalPatches } from './index.ts'
 import type { EnterprisePolicy } from './enterprise-policy.ts'
@@ -68,11 +69,11 @@ export function readProfilePatches(binName: string, context: ProfileContext, ini
   const own = initialProfile?.patches ?? loadOptionalPatches(binName, context.patchPath) ?? []
   const home = loadOptionalPatches(binName, join(context.home, PROFILE_PATCH_FILENAME)) ?? []
   if (context.enterprisePolicy !== undefined) {
-    const bundles = profile.layers.map(layer => layer.packageName)
-    if (context.name !== 'desktop' || bundles.join(',') !== '@deepseek-ai/dsh-base,@deepseek-ai/dsh-web-app'
-      || profile.skippedBundles.length !== 0 || own.length !== 0 || home.length !== 0 || context.overlays.length !== 0) {
+    if (context.name !== 'desktop' || profile.skippedBundles.length !== 0
+      || own.length !== 0 || home.length !== 0 || context.overlays.length !== 0) {
       throw new Error('enterprise policy: Desktop requires shipped bundles and empty profile, home and launch patches')
     }
+    assertEnterpriseBundles(profile, context.installAnchor, context.enterprisePolicy.approvedBundles ?? [])
   }
   const patches = structuredClone([
     ...profile.layers.flatMap(layer => layer.patches),
@@ -112,4 +113,47 @@ export function readProfilePatches(binName: string, context: ProfileContext, ini
     }
   }
   return patches
+}
+
+function assertEnterpriseBundles(
+  profile: Profile,
+  installAnchor: string,
+  approvedBundles: NonNullable<EnterprisePolicy['approvedBundles']>,
+): void {
+  const required = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']
+  const expected = [...required, ...approvedBundles.map(bundle => bundle.name)]
+  const actual = profile.layers.map(layer => layer.packageName)
+  if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index])) {
+    throw new Error('enterprise policy: Desktop bundle list must match shipped bundles and approvedBundles')
+  }
+  if (approvedBundles.length === 0) return
+  let installationModules: string
+  try { installationModules = realpathSync.native(dirname(dirname(dirname(resolve(installAnchor))))) }
+  catch { throw new Error('enterprise policy: cannot resolve the signed Desktop installation bundle directory') }
+  for (let index = 0; index < approvedBundles.length; index += 1) {
+    const approved = approvedBundles[index]
+    const layer = profile.layers[index + required.length]
+    if (approved === undefined || layer === undefined) {
+      throw new Error('enterprise policy: approved bundle is missing from the Desktop profile')
+    }
+    let packageDirectory: string
+    let manifest: unknown
+    try {
+      packageDirectory = realpathSync.native(layer.packageDir)
+      manifest = JSON.parse(readFileSync(join(packageDirectory, 'package.json'), 'utf8')) as unknown
+    } catch {
+      throw new Error(`enterprise policy: approved bundle ${approved.name} is unavailable in the signed Desktop installation`)
+    }
+    const fromInstallation = relative(installationModules, packageDirectory)
+    const insideInstallation = fromInstallation !== '' && fromInstallation !== '..'
+      && !fromInstallation.startsWith(`..${sep}`) && !isAbsolute(fromInstallation)
+    if (!insideInstallation) {
+      throw new Error(`enterprise policy: approved bundle ${approved.name} must come from the signed Desktop installation`)
+    }
+    if (typeof manifest !== 'object' || manifest === null || Array.isArray(manifest)
+      || !('name' in manifest) || !('version' in manifest)
+      || manifest.name !== approved.name || manifest.version !== approved.version) {
+      throw new Error(`enterprise policy: installed bundle ${approved.name} does not match its approved version ${approved.version}`)
+    }
+  }
 }

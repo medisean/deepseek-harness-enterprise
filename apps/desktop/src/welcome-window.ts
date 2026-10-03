@@ -13,7 +13,11 @@ import { WELCOME_IPC, type WelcomeOperations } from './welcome-api.ts'
  * @param locale - shell-owned localized copy.
  * @returns sandboxed window options with a locale-only preload.
  */
-export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopLocale): BrowserWindowConstructorOptions {
+export function welcomeWindowOptions(
+  platform: NodeJS.Platform,
+  locale: DesktopLocale,
+  enterpriseSso = false,
+): BrowserWindowConstructorOptions {
   return {
     width: 600,
     height: 700,
@@ -38,7 +42,7 @@ export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopL
     } as const : {}),
     webPreferences: {
       preload: fileURLToPath(new URL('./preload-welcome.cjs', import.meta.url)),
-      additionalArguments: [`--dsh-welcome-locale=${locale.id}`],
+      additionalArguments: [`--dsh-welcome-locale=${locale.id}`, ...(enterpriseSso ? ['--dsh-enterprise-sso'] : [])],
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -57,7 +61,7 @@ let disposeActiveHandlers: (() => void) | undefined
  * @returns the visible window; a failed load destroys it before rejecting.
  */
 export async function openWelcomeWindow(locale: DesktopLocale, operations: WelcomeOperations): Promise<BrowserWindow> {
-  const options = welcomeWindowOptions(process.platform, locale)
+  const options = welcomeWindowOptions(process.platform, locale, operations.enterpriseSso)
   const window = new BrowserWindow(options)
   disposeActiveHandlers?.()
   let active = true
@@ -67,6 +71,7 @@ export async function openWelcomeWindow(locale: DesktopLocale, operations: Welco
     for (const channel of [
       WELCOME_IPC.analyticsEnabled, WELCOME_IPC.analytics, WELCOME_IPC.takeNotice, WELCOME_IPC.saveApiKey,
       WELCOME_IPC.skip, WELCOME_IPC.start, WELCOME_IPC.cancel, WELCOME_IPC.copyLink,
+      WELCOME_IPC.enterpriseStart, WELCOME_IPC.enterpriseCancel,
     ]) {
       ipcMain.removeHandler(channel)
     }
@@ -112,6 +117,16 @@ export async function openWelcomeWindow(locale: DesktopLocale, operations: Welco
     assertSender(event)
     if (typeof id !== 'string') throw new Error('desktop welcome: invalid attempt')
     return operations.copySignInLink(id as SignInAttemptId)
+  })
+  ipcMain.handle(WELCOME_IPC.enterpriseStart, async (event) => {
+    assertSender(event)
+    if (!operations.enterpriseSso) throw new Error('desktop welcome: enterprise sign-in is disabled')
+    return operations.startEnterpriseSignIn()
+  })
+  ipcMain.handle(WELCOME_IPC.enterpriseCancel, async (event) => {
+    assertSender(event)
+    if (!operations.enterpriseSso) throw new Error('desktop welcome: enterprise sign-in is disabled')
+    return operations.cancelEnterpriseSignIn()
   })
   window.once('closed', disposeHandlers)
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))

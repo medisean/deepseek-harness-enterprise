@@ -16,6 +16,7 @@ describe('desktop build paths', () => {
       'root',
       'artifacts',
       'unsignedArtifacts',
+      'enterpriseArtifacts',
       'runtime',
       'packageSet',
       'dsh',

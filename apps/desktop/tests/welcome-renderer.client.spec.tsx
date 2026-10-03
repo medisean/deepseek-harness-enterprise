@@ -11,10 +11,15 @@ import type { WelcomeSaveResult, WelcomeNotice } from '../src/welcome-api.ts'
 const html = readFileSync(join(import.meta.dirname, '../renderer/welcome.html'), 'utf8')
 afterEach(cleanup)
 
-function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotice | undefined>>().mockResolvedValue(undefined)) {
+function mount(
+  language = 'zh-CN',
+  takeNotice = vi.fn<() => Promise<WelcomeNotice | undefined>>().mockResolvedValue(undefined),
+  enterpriseSso = false,
+) {
   cleanup()
   const stopAccount = vi.fn()
   const api = {
+    enterpriseSso,
     takeNotice,
     analytics: vi.fn(async (_event: string, _attributes: object) => {}),
     analyticsEnabled: async () => true,
@@ -22,6 +27,8 @@ function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotic
     startSignIn: vi.fn(async (): Promise<AccountView> => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null })),
     cancelSignIn: vi.fn(async (): Promise<AccountView> => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out', attempt: null })),
     copySignInLink: vi.fn(async () => undefined),
+    startEnterpriseSignIn: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    cancelEnterpriseSignIn: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     ...resolveDesktopLocale(language),
     saveApiKey: vi.fn<(value: string) => Promise<WelcomeSaveResult>>().mockResolvedValue({ ok: true }),
     skip: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
@@ -46,6 +53,25 @@ function mount(language = 'zh-CN', takeNotice = vi.fn<() => Promise<WelcomeNotic
   }
   return { document, api, input, button, enterKey, submit, copy, unmount: mounted.unmount, stopAccount }
 }
+
+it('uses only enterprise sign-in and lets the user cancel the external-browser flow', async () => {
+  const view = mount('en', undefined, true)
+  const completion = Promise.withResolvers<undefined>()
+  view.api.startEnterpriseSignIn.mockReturnValueOnce(completion.promise.then(() => undefined))
+  expect(view.button('#api-key').hidden).toBe(true)
+  fireEvent.click(view.button('#sign-in'))
+  expect(view.button('#auth-cancel').disabled).toBe(false)
+  expect(view.api.startEnterpriseSignIn).toHaveBeenCalledOnce()
+  expect(view.api.onAccountState).not.toHaveBeenCalled()
+  expect(view.button('#auth-loading').getAttribute('aria-label')).toBe(view.api.messages.welcomeSsoWaiting)
+  fireEvent.click(view.button('#auth-cancel'))
+  await vi.waitFor(() => {
+    expect(view.api.cancelEnterpriseSignIn).toHaveBeenCalledOnce()
+    expect(view.button('#sign-in').closest('#entry-actions')!.hasAttribute('hidden')).toBe(false)
+  })
+  expect(view.api.startSignIn).not.toHaveBeenCalled()
+  expect(view.api.saveApiKey).not.toHaveBeenCalled()
+})
 
 describe('desktop welcome presentation', () => {
   it.each(['zh-CN', 'en'])('renders the %s entry and API-key step', async (language) => {

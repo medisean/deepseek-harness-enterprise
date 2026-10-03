@@ -233,6 +233,22 @@ pnpm run package:desktop:win:x64
 
 macOS arm64 命令要求 Apple Silicon。macOS x64 命令可以在 Intel macOS 或带 Rosetta 的 Apple Silicon 上运行。Windows x64 命令要求 Windows x64。Linux 不是受支持的 Desktop 发布目标。
 
+如需在 Windows 设备上为所有账户统一安装，可在 Windows x64 上构建独立命名且经过签名的机器级安装包：
+
+```sh
+pnpm run package:desktop:win:x64:enterprise
+```
+
+产物位于 `apps/desktop/.desktop-build/targets/win-x64/enterprise-artifacts/`；安装时需要管理员权限，并关闭 Desktop 自动更新源，由 IT 管控版本下发。企业软件分发平台可使用 NSIS `/S` 静默安装。若同一 Windows 账户已安装 per-user 版本，切换前先卸载。标准 `package:desktop:win:x64` 命令仍生成 per-user 安装包。
+
+如需在 Windows 设备上为所有账户统一安装，可在 Windows x64 上构建独立命名且经过签名的机器级安装包：
+
+```sh
+pnpm run package:desktop:win:x64:enterprise
+```
+
+产物位于 `apps/desktop/.desktop-build/targets/win-x64/enterprise-artifacts/`；安装时需要管理员权限，并关闭 Desktop 自动更新源，由 IT 管控版本下发。企业软件分发平台可使用 NSIS `/S` 静默安装。若同一 Windows 账户已安装 per-user 版本，切换前先卸载。标准 `package:desktop:win:x64` 命令仍生成 per-user 安装包。
+
 每个目标都在 `apps/desktop/.desktop-build/targets/<target>/` 下持有自己的打包输入、已准备运行时、包集合、dsh 依赖树、pnpm 准备状态、未打包应用、更新元数据和最终产物。Electron 归档缓存继续由 `.desktop-build/downloads` 共享，因为每个归档文件名都包含版本、平台和架构，并且在解包前经过验证。目标构建绝不读取其他目标的可变准备状态。
 
 ### 运行时文件筛选

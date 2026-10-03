@@ -2,7 +2,10 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError, QUIT_INSPECTION_DEADLINE_MS } from '../src/host-process.ts'
+import {
+  DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError, enterpriseHostEnvironment,
+  QUIT_INSPECTION_DEADLINE_MS,
+} from '../src/host-process.ts'
 
 const roots: string[] = []
 const hosts: DesktopHostProcess[] = []
@@ -48,6 +51,13 @@ process.on('message', message => {
   server.closeAllConnections()
 })
 `
+
+it('strips API-key environment variants from an OIDC-managed Host', () => {
+  const source = { DEEPSEEK_API_KEY: 'private', deepseek_api_key: 'also-private', PATH: '/bin' }
+  const managed = enterpriseHostEnvironment(source)
+  expect(managed).toEqual({ PATH: '/bin' })
+  expect(source.DEEPSEEK_API_KEY).toBe('private')
+})
 
 function projectWithHost(source = HTTP_HOST): string {
   const project = mkdtempSync(join(tmpdir(), 'dsh-desktop-host-test-'))

@@ -7,6 +7,17 @@ import { assertWindowsPolicyAcl, type WindowsPolicyAclRunner } from '../src/wind
 
 const root = mkdtempSync(join(tmpdir(), 'dsh-policy-acl-'))
 const file = join(root, 'policy.json')
+const securePolicyScript = join(import.meta.dirname, '../../../../deploy/enterprise/Secure-Policy.ps1')
+const policy = { version: 1, modelGateway: 'https://gateway.example.test/anthropic',
+  workspaceMode: 'read-only', workspaceRoot: root,
+  oidc: { issuer: 'https://id.example.test/tenant', clientId: 'desktop-test',
+    gatewayScope: 'model:run', scopes: ['openid', 'profile', 'offline_access', 'model:run'],
+    audience: 'https://gateway.example.test/' } }
+
+function runSecurePolicy(): void {
+  execFileSync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-File', securePolicyScript, '-PolicyPath', file], { windowsHide: true, timeout: 15_000 })
+}
 
 it('runs the ACL verifier through a hidden, bounded PowerShell process', () => {
   let invocation: { command: string; args: string[]; options: Parameters<WindowsPolicyAclRunner>[2] } | undefined
@@ -31,12 +42,9 @@ it('does not expose PowerShell diagnostics when the ACL check fails', () => {
 
 beforeAll(() => {
   if (process.platform !== 'win32') return
-  writeFileSync(file, JSON.stringify({ version: 1, modelGateway: 'https://gateway.example.test/anthropic',
-    workspaceMode: 'read-only', workspaceRoot: root }))
+  writeFileSync(file, JSON.stringify(policy))
   try {
-    execFileSync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-      '-File', join(import.meta.dirname, '../../../../deploy/enterprise/Secure-Policy.ps1'), '-PolicyPath', file],
-    { windowsHide: true, timeout: 15_000 })
+    runSecurePolicy()
   } catch (error) {
     const diagnostic = error instanceof Error && 'stderr' in error && error.stderr instanceof Buffer && error.stderr.length > 0
       ? error.stderr.toString('utf8').trim()
@@ -67,6 +75,46 @@ it.skipIf(process.platform !== 'win32')('accepts the administrator-owned policy 
   } catch {
     throw new Error(`Windows ACL validation rejected provisioned policy: ${diagnostic}`)
   }
+})
+
+it.skipIf(process.platform !== 'win32')('accepts OIDC policy and rejects invalid OIDC fields in the deployment script', () => {
+  for (const oidc of [
+    null,
+    { issuer: 'http://id.example.test', clientId: 'desktop-test', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'https://gateway.example.test/' },
+    { issuer: 'https://id.example.test', clientId: 'desktop-test', gatewayScope: 'model:run', scopes: ['profile', 'model:run'], audience: 'https://gateway.example.test/' },
+    { issuer: 'https://id.example.test', clientId: 'desktop-test', gatewayScope: 'model:run', scopes: ['openid', 'openid', 'model:run'], audience: 'https://gateway.example.test/' },
+    { issuer: 'https://id.example.test?tenant=1', clientId: 'desktop-test', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'https://gateway.example.test/' },
+    { issuer: 'https://id.example.test', clientId: ' ', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'https://gateway.example.test/' },
+    { issuer: 'https://id.example.test', clientId: 'desktop-test', gatewayScope: 'model:run', scopes: ['openid', 'bad scope', 'model:run'], audience: 'https://gateway.example.test/' },
+    { issuer: 'https://id.example.test', clientId: 'desktop-test', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'relative' },
+    { issuer: 'https://id.example.test', clientId: 'desktop-test', gatewayScope: 'model:run', scopes: ['openid', 'model:run'], audience: 'https://gateway.example.test/', unknown: true },
+    { issuer: 'https://id.example.test', clientId: 'desktop-test', gatewayScope: 'model:run', scopes: ['openid', 'model:run'] },
+    { issuer: 'https://id.example.test', clientId: 'desktop-test', gatewayScope: 'model:run', scopes: ['openid'], audience: 'https://gateway.example.test/' },
+  ]) {
+    writeFileSync(file, JSON.stringify({ ...policy, oidc }))
+    expect(() => { runSecurePolicy() }).toThrow()
+  }
+  writeFileSync(file, JSON.stringify(policy))
+  expect(() => { runSecurePolicy() }).not.toThrow()
+})
+
+it.skipIf(process.platform !== 'win32')('accepts exact approved bundle versions and rejects unsafe entries in the deployment script', () => {
+  const approvedBundles = [{ name: '@contoso/dsh-plugin', version: '2.4.1-rc.2+build.7' }]
+  writeFileSync(file, JSON.stringify({ ...policy, approvedBundles }))
+  expect(() => { runSecurePolicy() }).not.toThrow()
+  for (const invalid of [
+    [{ name: '@contoso/dsh-plugin', version: '^2.4.1' }],
+    [{ name: '@contoso/dsh-plugin', version: '2.4' }],
+    [{ name: '@contoso/dsh-plugin', version: '2.4.1-' }],
+    [{ name: '@deepseek-ai/dsh-base', version: '2.4.1' }],
+    [{ name: '../plugin', version: '2.4.1' }],
+    [{ name: '@contoso/dsh-plugin', version: '2.4.1', extra: true }],
+    [approvedBundles[0], approvedBundles[0]],
+  ]) {
+    writeFileSync(file, JSON.stringify({ ...policy, approvedBundles: invalid }))
+    expect(() => { runSecurePolicy() }).toThrow()
+  }
+  writeFileSync(file, JSON.stringify(policy))
 })
 
 it.skipIf(process.platform !== 'win32')('rejects a policy writable by Authenticated Users', () => {

@@ -90,8 +90,15 @@ if (($policyItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 
 }
 $policy = Get-Content -LiteralPath $fullPath -Raw | ConvertFrom-Json
 $keys = @($policy.PSObject.Properties.Name | Sort-Object)
-if (($keys -join ',') -ne 'modelGateway,version,workspaceMode,workspaceRoot' -or $policy.version -ne 1) {
-  throw 'Policy must contain exactly version, modelGateway, workspaceMode, and workspaceRoot.'
+$keyNames = $keys -join ','
+if (($keyNames -notin @(
+      'modelGateway,version,workspaceMode,workspaceRoot',
+      'approvedBundles,modelGateway,version,workspaceMode,workspaceRoot',
+      'modelGateway,oidc,version,workspaceMode,workspaceRoot',
+      'approvedBundles,modelGateway,oidc,version,workspaceMode,workspaceRoot'
+    )) -or
+    $policy.version -ne 1) {
+  throw 'Policy must contain version, modelGateway, workspaceMode, workspaceRoot, and optional approvedBundles and oidc.'
 }
 if (($policy.modelGateway -isnot [string]) -or
     ($policy.workspaceRoot -isnot [string]) -or
@@ -107,6 +114,59 @@ $gateway = [Uri]$policy.modelGateway
 if (-not $gateway.IsAbsoluteUri -or $gateway.Scheme -ne 'https' -or $gateway.UserInfo -ne '' -or
     $gateway.Query -ne '' -or $gateway.Fragment -ne '' -or $gateway.Host -in @('api.deepseek.com', 'www.deepseek.com')) {
   throw 'modelGateway must be an approved HTTPS URL without credentials, query, or fragment.'
+}
+if ($policy.PSObject.Properties.Name -contains 'approvedBundles') {
+  $bundles = $policy.approvedBundles
+  if ($bundles -isnot [array] -or $bundles.Count -gt 64) {
+    throw 'approvedBundles must be an array of at most 64 exact package versions.'
+  }
+  $bundleNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+  $packageNamePattern = '^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$'
+  $exactSemverPattern = '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$'
+  foreach ($bundle in $bundles) {
+    if ($null -eq $bundle -or $bundle -isnot [System.Management.Automation.PSCustomObject] -or
+        (@($bundle.PSObject.Properties.Name | Sort-Object) -join ',') -ne 'name,version' -or
+        $bundle.name -isnot [string] -or $bundle.name.Length -gt 214 -or
+        $bundle.name -notmatch $packageNamePattern -or
+        $bundle.name -in @('@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app') -or
+        $bundle.version -isnot [string] -or $bundle.version.Length -gt 128 -or
+        $bundle.version -notmatch $exactSemverPattern -or -not $bundleNames.Add($bundle.name)) {
+      throw 'approvedBundles entries require unique non-core package names and exact semantic versions.'
+    }
+  }
+}
+if ($policy.PSObject.Properties.Name -contains 'oidc') {
+  $oidc = $policy.oidc
+  if ($null -eq $oidc -or $oidc -isnot [System.Management.Automation.PSCustomObject]) {
+    throw 'oidc must be an object.'
+  }
+  $oidcKeys = @($oidc.PSObject.Properties.Name | Sort-Object) -join ','
+  if ($oidcKeys -ne 'audience,clientId,gatewayScope,issuer,scopes' -or
+      $oidc.issuer -isnot [string] -or [string]::IsNullOrWhiteSpace($oidc.issuer) -or
+      $oidc.clientId -isnot [string] -or [string]::IsNullOrWhiteSpace($oidc.clientId) -or
+      $oidc.gatewayScope -isnot [string] -or $oidc.gatewayScope -notmatch '^[\x21-\x7e]+$' -or
+      $oidc.scopes -isnot [array] -or $oidc.scopes.Count -eq 0) {
+    throw 'oidc must contain issuer, clientId, gatewayScope included in unique scopes with openid, and audience.'
+  }
+  $issuer = $null
+  if (-not [Uri]::TryCreate($oidc.issuer, [UriKind]::Absolute, [ref]$issuer) -or
+      $issuer.Scheme -ne 'https' -or $issuer.UserInfo -ne '' -or $issuer.Query -ne '' -or $issuer.Fragment -ne '') {
+    throw 'oidc issuer must be an HTTPS URL without credentials, query, or fragment.'
+  }
+  $scopeSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+  foreach ($scope in $oidc.scopes) {
+    if ($scope -isnot [string] -or $scope -notmatch '^[\x21-\x7e]+$' -or -not $scopeSet.Add($scope)) {
+      throw 'oidc scopes must be unique printable ASCII strings.'
+    }
+  }
+  if (-not $scopeSet.Contains('openid')) { throw "oidc scopes must include 'openid'." }
+  if (-not $scopeSet.Contains($oidc.gatewayScope)) { throw 'oidc scopes must include gatewayScope.' }
+  $audience = $null
+  if ($oidc.audience -isnot [string] -or
+      -not [Uri]::TryCreate($oidc.audience, [UriKind]::Absolute, [ref]$audience) -or
+      $audience.UserInfo -ne '' -or $audience.Fragment -ne '') {
+    throw 'oidc audience must be an absolute URI without credentials or fragment.'
+  }
 }
 Set-EnterpriseAcl $fullPath $false
 Assert-EnterpriseAcl $directory

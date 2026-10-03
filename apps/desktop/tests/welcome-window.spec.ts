@@ -40,11 +40,14 @@ function createWindow() {
 beforeEach(() => { electron.create.mockReset(); electron.handlers.clear() })
 
 const operations = {
+  enterpriseSso: false,
   analyticsEnabled: async () => true,
   takeNotice: async () => undefined,
   startSignIn: async () => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out' as const, attempt: null }),
   cancelSignIn: async () => ({ links: { usageUrl: 'http://localhost/usage', topUpUrl: 'http://localhost/top_up' }, status: 'signed-out' as const, attempt: null }),
   copySignInLink: async () => undefined,
+  startEnterpriseSignIn: async () => undefined,
+  cancelEnterpriseSignIn: async () => undefined,
   saveApiKey: () => Promise.resolve({ ok: true as const }),
   skip: () => Promise.resolve(),
 }
@@ -73,6 +76,11 @@ describe('desktop welcome window', () => {
       expect(options.vibrancy).toBeUndefined()
       expect(options.backgroundMaterial).toBeUndefined()
     }
+  })
+
+  it('marks the isolated Welcome preload for enterprise SSO without sending policy details', () => {
+    expect(welcomeWindowOptions('darwin', resolveDesktopLocale('en'), true).webPreferences?.additionalArguments)
+      .toEqual(['--dsh-welcome-locale=en', '--dsh-enterprise-sso'])
   })
 
   it('waits for its local document and blocks renderer navigation', async () => {
