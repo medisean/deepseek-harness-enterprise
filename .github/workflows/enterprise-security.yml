@@ -47,6 +47,7 @@ jobs:
           packages/llm/llm-deepseek-api-key/tests/enterprise-gateway.spec.ts
           apps/enterprise-gateway/tests/enterprise-gateway.spec.ts
           apps/cli/tests/enterprise-cli.spec.ts
+          apps/desktop/tests/enterprise-home.spec.ts
           apps/desktop/tests/enterprise-oidc.spec.ts
       - name: Desktop startup regression
         if: runner.os == 'macOS'

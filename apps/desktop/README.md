@@ -481,7 +481,7 @@ An unpackaged Electron process uses `.desktop-build/development/project` under i
 
 - Release signing, notarization, update hosting, and previous-version installed-artifact qualification require the production release environment.
 - Dependency lifecycle scripts follow pnpm’s build permissions; Desktop provides no separate approval dialog.
-- The desktop shell shares sessions, settings, credentials, workspaces, and storage under `$DSH_HOME` with CLI dsh, while executable packages, plugin activation, and lockfiles remain separate.
+- A regular Desktop shell shares product data under `$DSH_HOME` with CLI dsh. Managed Desktop uses a separate Harness home below Electron `userData`; both modes keep executable packages, plugin activation, and lockfiles separate from CLI.
 - Unpackaged startup on an Electron win32-arm64 host now succeeds, but the payload remains x64: the architecture check in `packages/skill/tool-workspace-dependencies/src/index.ts` compares the recorded payload architecture against the host `process.arch`, so the `load_workspace_dependencies` tool can still reject the primary runtime.
 
 The app-only `dshOnboarding.hasApiKey()` preload method returns the welcome backend’s current API-key presence boolean; native login and onboarding share credential discovery, and only the owned application main frame may invoke it.

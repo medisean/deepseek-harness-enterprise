@@ -62,6 +62,7 @@ import { DesktopTray } from './tray.ts'
 import { DesktopBackgroundNotice } from './background-notice.ts'
 import { loadEnterprisePolicy } from '@deepseek-ai/dsh-app-boot'
 import { EnterpriseOidcSession, EnterpriseTokenVault } from './enterprise-oidc.ts'
+import { prepareEnterpriseHarnessHome } from './enterprise-home.ts'
 
 let focusPrimaryWindow = (): void => {}
 let stopForRecovery = async (): Promise<void> => {}
@@ -317,6 +318,7 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
 
 async function main(): Promise<void> {
   const enterprisePolicy = app.isPackaged ? loadEnterprisePolicy() : undefined
+  if (enterprisePolicy !== undefined) process.env.DSH_HOME = prepareEnterpriseHarnessHome(app.getPath('userData'))
   const enterpriseOidc = enterprisePolicy?.oidc === undefined ? undefined : new EnterpriseOidcSession(
     enterprisePolicy.oidc, new EnterpriseTokenVault(app.getPath('userData'), safeStorage),
   )
