@@ -1,0 +1,12 @@
+{
+  "engineering": {
+    "models": ["deepseek-chat", "deepseek-reasoner"],
+    "maxConcurrentRequests": 12,
+    "maxTokensPerRequest": 8192
+  },
+  "research": {
+    "models": ["deepseek-chat"],
+    "maxConcurrentRequests": 4,
+    "maxTokensPerRequest": 4096
+  }
+}

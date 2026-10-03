@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write deploy/enterprise/gateway/README.md
+/enterprise-model-gateway:
+  en: a688b4d6c3d087f1
+  zh: 69b537f18fe308e1
+/enterprise-model-gateway/deploy-with-docker-compose:
+  en: cd0bcc499382dd85
+  zh: 5770ba68781c4ab3
+/enterprise-model-gateway/identity-and-authorization:
+  en: 61c6d95772dc0cbc
+  zh: dd284f841c24ad80
+/enterprise-model-gateway/audit-and-operations:
+  en: e5fff89c11151f7d
+  zh: 7730cd5488445390

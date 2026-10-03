@@ -1,0 +1,21 @@
+{
+  "name": "@deepseek-ai/dsh-enterprise-gateway",
+  "description": "OIDC-authenticated, privacy-preserving model gateway for enterprise Desktop deployments",
+  "version": "0.2.0-rc.2",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "files": [],
+  "scripts": {
+    "start": "node src/server.mjs"
+  },
+  "dependencies": {
+    "jose": "6.2.12",
+    "redis": "5.12.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "openid-client": "^6.8.8",
+    "vitest": "^4.1.8"
+  }
+}

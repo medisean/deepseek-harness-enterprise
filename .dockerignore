@@ -1,0 +1,11 @@
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!patches/
+!patches/**
+!apps/
+!apps/enterprise-gateway/
+!apps/enterprise-gateway/package.json
+!apps/enterprise-gateway/src/
+!apps/enterprise-gateway/src/**

@@ -77,6 +77,29 @@ describe('installer preparation preserves application dependencies', () => {
     expect(config.artifactName).toBe('deepseek-harness-${version}-${os}-${arch}-unsigned.${ext}')
   })
 
+  it('isolates the signed machine-wide enterprise installer from user installs and update feeds', async () => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const common = { DSH_DESKTOP_APP_ID: 'com.example.installer', DSH_DESKTOP_AUTO_UPDATE_ENV: 'test',
+      DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
+      DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }) }
+    const config = createElectronBuilderConfig({
+      ...common,
+      DSH_DESKTOP_TARGET_PLATFORM: 'win32',
+      DSH_DESKTOP_TARGET_ARCH: 'x64',
+      DSH_DESKTOP_UNSIGNED: '1',
+      DSH_DESKTOP_ENTERPRISE_INSTALLER: '1',
+    }, 'win32', 'x64')
+    expect(config.nsis).toMatchObject({ oneClick: false, perMachine: true, allowElevation: true })
+    expect(config.artifactName).toBe('deepseek-harness-${version}-${os}-${arch}-enterprise-unsigned.${ext}')
+    expect(config.directories.output).toContain('enterprise-artifacts')
+    expect(config.nsis.include).toMatch(/scripts[\\/]installer-enterprise\.nsh$/u)
+    expect(config.publish).toBeNull()
+    expect(() => createElectronBuilderConfig({ ...common, DSH_DESKTOP_ENTERPRISE_INSTALLER: 'true' }, 'win32', 'x64'))
+      .toThrow('DSH_DESKTOP_ENTERPRISE_INSTALLER must be 0 or 1')
+    expect(() => createElectronBuilderConfig({ ...common, DSH_DESKTOP_ENTERPRISE_INSTALLER: '1' }, 'darwin', 'arm64'))
+      .toThrow('enterprise machine-wide installer requires Windows')
+  })
+
   it('packages every preload entry point the shell loads', async () => {
     const { readdirSync, readFileSync } = await import('node:fs')
     const sourceDirectory = new URL('../src/', import.meta.url)

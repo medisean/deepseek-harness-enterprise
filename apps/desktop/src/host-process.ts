@@ -24,6 +24,9 @@ interface PlatformSessionEvent {
 }
 
 type DesktopHostEvent = ReadyEvent | FatalEvent | PlatformSessionEvent | { readonly type: 'shutdown-complete' } | {
+  readonly type: 'enterprise-token-request'
+  readonly requestId: number
+} | {
   readonly type: 'update-tasks'
   readonly requestId: number
   readonly active: boolean
@@ -37,7 +40,7 @@ type DesktopHostEvent = ReadyEvent | FatalEvent | PlatformSessionEvent | { reado
 }
 
 /** Correlated answer to one shell control request. */
-type DesktopHostControlResponse = Extract<DesktopHostEvent, { readonly requestId: number }>
+type DesktopHostControlResponse = Extract<DesktopHostEvent, { readonly type: 'update-tasks' | 'quit-inspection' }>
 
 /** What quitting now would affect, as reported by the Host. */
 export interface DesktopQuitInspection {
@@ -50,12 +53,19 @@ export const QUIT_INSPECTION_DEADLINE_MS = 2_000
 
 const MAX_HOST_DIAGNOSTIC_CHARS = 64 * 1024
 
+/** Remove the unmanaged DeepSeek API-key variable from an SSO-managed Host and its children. */
+export function enterpriseHostEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(environment).filter(([name]) => name.toUpperCase() !== 'DEEPSEEK_API_KEY'))
+}
+
 function isDesktopHostEvent(message: unknown): message is DesktopHostEvent {
   if (typeof message !== 'object' || message === null || !('type' in message)) return false
   const candidate = message as Record<string, unknown>
   switch (candidate.type) {
     case 'shutdown-complete':
       return true
+    case 'enterprise-token-request':
+      return Number.isSafeInteger(candidate.requestId)
     case 'ready':
       return typeof candidate.url === 'string'
     case 'platform-session': {
@@ -165,6 +175,7 @@ export class DesktopHostProcess {
    *   `office-skills` resources fail Host startup.
    * @param packageManager - Bundled pnpm entry and Node launcher directory, scoped to package operations.
    * @param onPlatformSession - Private credential updates for embedded Platform views.
+   * @param onEnterpriseTokenRequest - Resolves a current model-gateway token without sending it through the environment or renderer.
    */
   constructor(
     private readonly node: string,
@@ -177,6 +188,7 @@ export class DesktopHostProcess {
     private readonly packageManager?: { readonly pnpm: string; readonly nodeBin: string },
 
     private readonly onPlatformSession?: (session: PlatformSession | null) => void,
+    private readonly onEnterpriseTokenRequest?: () => Promise<string | undefined>,
   ) {}
 
   /**
@@ -211,6 +223,7 @@ export class DesktopHostProcess {
       }
       if (message.type === 'ready') this.readyResolve({ url: message.url, injections: message.injections })
       else if (message.type === 'platform-session') this.onPlatformSession?.(message.session)
+      else if (message.type === 'enterprise-token-request') void this.respondEnterpriseToken(child, message.requestId)
       else if (message.type === 'shutdown-complete') {
         if (this.stopping) this.shutdownCompleted = true
         else this.fail(new Error('dsh desktop host acknowledged an unrequested shutdown'))
@@ -232,6 +245,15 @@ export class DesktopHostProcess {
       })
     })
     return this.readyPromise
+  }
+
+  private async respondEnterpriseToken(child: ChildProcess, requestId: number): Promise<void> {
+    try {
+      const token = await this.onEnterpriseTokenRequest?.()
+      child.send({ type: 'enterprise-token-response', requestId, ...(token === undefined ? {} : { token }) })
+    } catch {
+      child.send({ type: 'enterprise-token-response', requestId })
+    }
   }
 
   /**

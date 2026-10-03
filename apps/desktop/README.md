@@ -231,6 +231,22 @@ pnpm run package:desktop:win:x64
 
 The macOS arm64 command requires Apple Silicon. The macOS x64 command runs on Intel macOS or Apple Silicon with Rosetta. The Windows x64 command requires Windows x64. Linux is not a supported Desktop release target.
 
+For an organization-wide Windows installation, build the separately named, signed per-machine installer on Windows x64:
+
+```sh
+pnpm run package:desktop:win:x64:enterprise
+```
+
+It writes to `apps/desktop/.desktop-build/targets/win-x64/enterprise-artifacts/`, requires administrator privileges at install time, and disables the Desktop auto-update feed so IT controls rollout. Deploy it silently with the enterprise software manager using NSIS `/S`. Remove a per-user installation before switching the same Windows account to the machine-wide build. The standard `package:desktop:win:x64` command remains per-user.
+
+For an organization-wide Windows installation, build the separately named, signed per-machine installer on Windows x64:
+
+```sh
+pnpm run package:desktop:win:x64:enterprise
+```
+
+It writes to `apps/desktop/.desktop-build/targets/win-x64/enterprise-artifacts/`, requires administrator privileges at install time, and disables the Desktop auto-update feed so IT controls rollout. Deploy it silently with the enterprise software manager using NSIS `/S`. Remove a per-user installation before switching the same Windows account to the machine-wide build. The standard `package:desktop:win:x64` command remains per-user.
+
 Each target owns its packed package inputs, prepared runtime, package set, dsh tree, pnpm preparation state, unpacked application, update metadata, and final artifacts under `apps/desktop/.desktop-build/targets/<target>/`. The Electron archive cache remains shared under `.desktop-build/downloads` because every archive name includes its version, platform, and architecture and is verified before extraction. A target build never consumes another target's mutable preparation state.
 
 ### Runtime file selection
@@ -465,7 +481,7 @@ An unpackaged Electron process uses `.desktop-build/development/project` under i
 
 - Release signing, notarization, update hosting, and previous-version installed-artifact qualification require the production release environment.
 - Dependency lifecycle scripts follow pnpm’s build permissions; Desktop provides no separate approval dialog.
-- The desktop shell shares sessions, settings, credentials, workspaces, and storage under `$DSH_HOME` with CLI dsh, while executable packages, plugin activation, and lockfiles remain separate.
+- A regular Desktop shell shares product data under `$DSH_HOME` with CLI dsh. Managed Desktop uses a separate Harness home below Electron `userData`; both modes keep executable packages, plugin activation, and lockfiles separate from CLI.
 - Unpackaged startup on an Electron win32-arm64 host now succeeds, but the payload remains x64: the architecture check in `packages/skill/tool-workspace-dependencies/src/index.ts` compares the recorded payload architecture against the host `process.arch`, so the `load_workspace_dependencies` tool can still reject the primary runtime.
 
 The app-only `dshOnboarding.hasApiKey()` preload method returns the welcome backend’s current API-key presence boolean; native login and onboarding share credential discovery, and only the owned application main frame may invoke it.

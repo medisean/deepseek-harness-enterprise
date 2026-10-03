@@ -350,6 +350,18 @@ it('publishes CLI runtime declarations and rejects a payload that omits them', (
     .toEqual([expect.stringContaining('@deepseek-ai/dsh: package.json files must be ["lib/*.js","lib/types/*.d.ts"]')])
 })
 
+it('keeps the container-only enterprise gateway private and limits its package payload', () => {
+  const dir = 'apps/enterprise-gateway'
+  const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+  expect(manifest.private).toBe(true)
+  expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+  expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: ['src'] } }).map(error => error.replaceAll('\\', '/')))
+    .toEqual([
+      'apps/enterprise-gateway/package.json: @deepseek-ai/dsh-enterprise-gateway: package.json files must not publish "src"',
+      'apps/enterprise-gateway/package.json: @deepseek-ai/dsh-enterprise-gateway: package.json files must be []',
+    ])
+})
+
 it('requires the shared Web injection entry in the published payload', () => {
   const manifest = JSON.parse(readFileSync(new URL('../packages/client/web/package.json', import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
   expect(checkWorkspaceManifest({ dir: 'packages/client/web', manifest })).toEqual([])

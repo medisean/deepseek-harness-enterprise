@@ -2,6 +2,7 @@
 
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { runCli } from '@deepseek-ai/dsh/lib/bin.js'
+import { loadEnterprisePolicy } from '@deepseek-ai/dsh-app-boot'
 import { installOfficeEngineResolution, runtimeArchivePath } from './office-engine.ts'
 
 /**
@@ -13,6 +14,7 @@ import { installOfficeEngineResolution, runtimeArchivePath } from './office-engi
 export async function runDesktopCli(runtimeDir: string, supportDir: string): Promise<void> {
   installOfficeEngineResolution(runtimeDir)
   await runCli({
+    enterprisePolicy: loadEnterprisePolicy(),
     manageDesktopProfile: true,
     packageManager: {
       command: process.execPath,

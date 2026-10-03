@@ -13,6 +13,17 @@ import { en, zh } from '../src/locale.ts'
 import { DesktopUpdatePreparationError } from '../src/update-error.ts'
 import { writeCrashReport } from '../src/crash-report.ts'
 
+const loadPolicy = vi.hoisted(() => vi.fn<() => unknown>(() => undefined))
+const prepareEnterpriseHome = vi.hoisted(() => vi.fn<(userData: string) => string>())
+vi.mock('@deepseek-ai/dsh-app-boot', async importOriginal => ({
+  ...await importOriginal<typeof import('@deepseek-ai/dsh-app-boot')>(),
+  loadEnterprisePolicy: loadPolicy,
+}))
+vi.mock('../src/enterprise-home.ts', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/enterprise-home.ts')>(),
+  prepareEnterpriseHarnessHome: prepareEnterpriseHome,
+}))
+
 type InvokeEvent = { sender?: unknown; senderFrame: { url: string } }
 type InvokeHandler = (event: InvokeEvent, ...args: unknown[]) => unknown
 
@@ -392,6 +403,7 @@ function applicationMenuItems(): MenuItemConstructorOptions[] {
 beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()
+  loadPolicy.mockReturnValue(undefined)
   harness.dialog.showMessageBox.mockReset()
   harness.dialog.showMessageBox.mockResolvedValue({ response: 1 })
   testAuth.login.mockReset()
@@ -401,6 +413,7 @@ beforeEach(() => {
   const userData = mkdtempSync(join(tmpdir(), 'dsh-main-user-data-'))
   onTestFinished(() => { rmSync(userData, { recursive: true, force: true }) })
   harness.app.getPath.mockImplementation(name => name === 'userData' ? userData : `desktop-test-${name}`)
+  prepareEnterpriseHome.mockImplementation(userDataPath => join(userDataPath, 'enterprise-harness-home'))
   harness.dialog.showMessageBox.mockImplementation((options: { title?: string }) => {
     if (options.title !== en.startupFailed) return Promise.resolve({ response: 1 })
     harness.dialogShown.resolve()
@@ -414,6 +427,7 @@ beforeEach(() => {
   vi.stubEnv('DSH_DESKTOP_PRIMARY_RUNTIME_DIR', 'test-primary-runtime')
   vi.stubGlobal('process', { ...process, platform: 'win32', arch: 'x64', resourcesPath: 'desktop-test-resources' })
   vi.stubEnv('DSH_DESKTOP_HOST_INSPECT_PORT', undefined)
+  vi.stubEnv('DSH_HOME', '/test/shared-harness-home')
   vi.stubEnv('DSH_DESKTOP_DEV_PROJECT_DIR', undefined)
   vi.stubEnv('DSH_DESKTOP_MANDATORY_UPDATE_CONFIG', undefined)
   vi.stubEnv('DSH_DESKTOP_UPDATE_JOURNAL_DIR', undefined)
@@ -1051,6 +1065,17 @@ describe('desktop main startup', () => {
     await harness.navigated.promise
     return harness.hosts[0]!
   }
+
+  it('does not check the upstream update feed in a managed packaged launch', async () => {
+    loadPolicy.mockReturnValue({ version: 1, modelGateway: 'https://gateway.example.test/anthropic',
+      workspaceMode: 'read-only', workspaceRoot: '/approved' })
+    await readyForUpdate()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(loadPolicy).toHaveBeenCalledOnce()
+    expect(prepareEnterpriseHome).toHaveBeenCalledWith(harness.app.getPath('userData'))
+    expect(harness.hosts[0]!.environment?.DSH_HOME).toBe(join(harness.app.getPath('userData'), 'enterprise-harness-home'))
+    expect(harness.updateCheck).not.toHaveBeenCalled()
+  })
 
   it.each([
     ['win32', ['--updated'], true],

@@ -3,9 +3,11 @@ import type { Context } from '@deepseek-ai/cordis'
 import { assertUsableApiKey, LlmError } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
+import type {} from '@deepseek-ai/dsh-app-boot'
 import { registerDeepSeekProvider, catalogModelInfo } from '@deepseek-ai/dsh-llm-deepseek'
-import { Config, plainOptions, resolveAdapterOptions } from './config.ts'
+import { Config, plainOptions, resolveEnterpriseAdapterOptions } from './config.ts'
 import type { ResolvedDeepSeekOptions } from './config.ts'
+import { resolveProviderAuth } from './auth.ts'
 
 export { Config, plainOptions, resolveAdapterOptions } from './config.ts'
 export type { Options, ResolvedDeepSeekOptions } from './config.ts'
@@ -15,7 +17,10 @@ export const inject = ['llm']
 const PROVIDER = 'deepseek-official'
 
 export function apply(ctx: Context, config: Config): void {
-  const options = () => resolveAdapterOptions(plainOptions(config), launchEnvironmentOf(ctx))
+  const options = () => {
+    const gateway = ctx.get('profileContext')?.enterprisePolicy?.modelGateway
+    return resolveEnterpriseAdapterOptions(plainOptions(config), launchEnvironmentOf(ctx), gateway)
+  }
   options()
   const resolveApiKey = async (connection: ResolvedDeepSeekOptions): Promise<string> => {
     const ref = connection.apiKeyEnv
@@ -38,7 +43,11 @@ export function apply(ctx: Context, config: Config): void {
   ])
   registerDeepSeekProvider(ctx, PROVIDER, {
     options, providerName: 'DeepSeek',
-    resolveAuth: async connection => ({ headers: { 'x-api-key': await resolveApiKey(connection) } }),
+    resolveAuth: async connection => resolveProviderAuth(
+      ctx.get('profileContext')?.enterprisePolicy?.oidc !== undefined,
+      () => ctx.enterpriseAuth?.getAccessToken() ?? Promise.resolve(undefined),
+      () => resolveApiKey(connection),
+    ),
     discoverModels: (provider) => {
       const connection = options()
       return Promise.resolve(connection.models.map(model => catalogModelInfo(provider, model)))

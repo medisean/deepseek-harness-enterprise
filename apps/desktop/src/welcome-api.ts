@@ -15,6 +15,8 @@ export const WELCOME_IPC = {
   copyLink: 'dsh-welcome:copy-link',
   state: 'dsh-welcome:state',
   takeNotice: 'dsh-welcome:take-notice',
+  enterpriseStart: 'dsh-welcome:enterprise-start',
+  enterpriseCancel: 'dsh-welcome:enterprise-cancel',
 } as const
 
 /** Credential writes return a safe outcome without exposing Host diagnostics. */
@@ -27,6 +29,8 @@ type WelcomeEventName = 'auth_page_view' | 'auth_page_click' | 'api_key_save_cli
 
 /** Host-owned operations used by the welcome window. */
 export interface WelcomeOperations {
+  /** Whether machine policy requires enterprise OIDC instead of DeepSeek account or API-key login. */
+  readonly enterpriseSso: boolean
   /** @param eventName - allowed welcome event. @param attributes - approved fields without credentials. */
   analytics?<K extends WelcomeEventName>(eventName: K, attributes: ProductEventMap[K]): Promise<void>
   /** @returns the Host's current effective collection policy. */
@@ -39,6 +43,10 @@ export interface WelcomeOperations {
   cancelSignIn(id: SignInAttemptId): Promise<AccountView>
   /** @param id - current waiting attempt whose authorization URL is copied to the system clipboard. */
   copySignInLink(id: SignInAttemptId): Promise<void>
+  /** Start browser-based enterprise OIDC sign-in and enter the workspace after authorization. */
+  startEnterpriseSignIn(): Promise<void>
+  /** Cancel the pending enterprise OIDC browser flow. */
+  cancelEnterpriseSignIn(): Promise<void>
 
   /**
    * Store the official provider's key before entering the workspace.

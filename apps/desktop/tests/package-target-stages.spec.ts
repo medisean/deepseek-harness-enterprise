@@ -78,6 +78,15 @@ it('initializes shared storage only after acquiring the preflight stage lock', a
   await packageTarget(parseDesktopPackageInvocation(['win-x64'], 'win32', 'x64'), environment, run)
 })
 
+it('builds the machine-wide Windows installer into its isolated directory without a release feed record', async () => {
+  const { run, stages } = supervisor()
+  await packageTarget(parseDesktopPackageInvocation(['win-x64', '--enterprise'], 'win32', 'x64'), environment, run)
+  expect(run.run.mock.calls[0]![3].env).toHaveProperty('DSH_DESKTOP_ENTERPRISE_INSTALLER', '1')
+  expect(stages.at(-2)).toBe('exec electron-builder --config electron-builder.config.mjs --win --x64 --publish never')
+  expect(stages.at(-1)).toBe('exec tsx scripts/smoke-packaged-runtime.ts --enterprise')
+  expect(writeFileSync).not.toHaveBeenCalled()
+})
+
 it.each(['preflight:windows-signing', 'run build:official', 'run sign:primary-runtime', 'run prepare:dsh --defer-runtime-smoke', 'run sign:primary-runtime --dsh',
   'exec tsx scripts/smoke-packaged-runtime.ts',
   'exec electron-builder --config electron-builder.config.mjs --win --x64 --publish never'])

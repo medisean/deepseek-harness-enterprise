@@ -44,6 +44,16 @@ describe('desktop package target', () => {
       .toThrow(/at most one target/u)
   })
 
+  it('accepts the signed Windows enterprise installer only as a complete installer build', () => {
+    expect(parseDesktopPackageInvocation(['win-x64', '--enterprise'], 'win32', 'x64').enterprise).toBe(true)
+    expect(() => parseDesktopPackageInvocation(['mac-arm64', '--enterprise'], 'darwin', 'arm64'))
+      .toThrow(/requires win-x64/u)
+    for (const args of [['--enterprise', '--unsigned'], ['--enterprise', '--prepare-only'], ['--enterprise', '--dir']]) {
+      expect(() => parseDesktopPackageInvocation(args, 'win32', 'x64'))
+        .toThrow(/requires a signed Windows installer build/u)
+    }
+  })
+
   it('parses a build version, including the separator a pnpm run script forwards', () => {
     expect(parseDesktopPackageInvocation(['mac-arm64'], 'darwin', 'arm64').requestedBuildVersion).toBeUndefined()
     expect(parseDesktopPackageInvocation(['mac-arm64', '--build-version', '0.1.6-alpha.2.20260921.1'], 'darwin', 'arm64')

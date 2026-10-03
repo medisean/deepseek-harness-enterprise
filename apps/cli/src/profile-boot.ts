@@ -218,6 +218,8 @@ export interface ResolvedProfileRuntime {
 
 /** Options for {@link runProfile}. */
 export interface RunProfileOptions {
+  /** Administrator policy supplied by the managed Desktop launcher. */
+  enterprisePolicy?: import('@deepseek-ai/dsh-app-boot').EnterprisePolicy
   /** This run's frozen environment snapshot, provided before any entry mounts. */
   environment: LaunchEnvironmentSnapshot
   /** The profile name to boot. */
@@ -292,6 +294,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
       startedBundles: composed.profile.layers.map(layer => layer.packageName),
       cwd: process.cwd(), home: resolveDshHome(),
       overlays: composed.overlays, telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
+      ...(options.enterprisePolicy === undefined ? {} : { enterprisePolicy: options.enterprisePolicy }),
     }
     const ctx = await boot(NAME, rootConfig, readProfilePatches(NAME, profileContext, composed.profile), async (hostCtx) => {
       app.current = hostCtx

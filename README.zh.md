@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-本仓库是独立维护的企业隐私分支，并非 DeepSeek 官方发行版。首版默认关闭会话日志请求字段、插件清单请求字段、OTel 会话上送和桌面端产品埋点。实际覆盖范围、内网部署步骤和仍需企业侧落实的控制见[企业部署说明](ENTERPRISE.zh.md)。
+本仓库是独立维护的企业隐私分支，并非 DeepSeek 官方发行版。受管 Desktop 强制读取机器级策略，将内置模型锁定到批准网关，并禁用第三方插件和执行工具。适用范围及仍需企业落实的网络控制见[企业部署说明](ENTERPRISE.zh.md)。
 
 DeepSeek Harness（`dsh`）是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架）。
 

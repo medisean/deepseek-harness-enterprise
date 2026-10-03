@@ -20,7 +20,8 @@
  * @module @deepseek-ai/dsh-sandbox-policy
  */
 
-import { isAbsolute } from 'node:path'
+import { realpathSync } from 'node:fs'
+import { isAbsolute, relative, sep } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { z as zod } from 'zod'
 import z from '@deepseek-ai/schemastery'
@@ -71,6 +72,10 @@ declare module '@deepseek-ai/cordis' {
 export interface Config {
   /** File-sandbox mode a session starts from (default: `read-only`). */
   mode?: SandboxMode
+  /** Highest mode that a session or approved override may select. */
+  maximumMode?: SandboxMode
+  /** Optional host directory containing every session workspace. */
+  allowedWorkspaceRoot?: string
   /**
    * Absolute fallback root for agentless calls and sessions without a cwd (default:
    * `process.cwd()`). Normal agent calls use their session cwd instead.
@@ -111,6 +116,8 @@ export class SandboxPolicyService extends Service {
   // Inline schema call: the config catalog walks `static Config` statically.
   static Config: z<Config> = z.object({
     mode: z.union(['read-only', 'workspace-write', 'danger-full-access'] as const).default('read-only'),
+    maximumMode: z.union(['read-only', 'workspace-write', 'danger-full-access'] as const).default('danger-full-access'),
+    allowedWorkspaceRoot: z.string(),
     // No schema default: process.cwd() is resolved in the constructor so the
     // stored root is always absolute regardless of how it was supplied.
     workspaceRoot: z.string(),
@@ -120,6 +127,10 @@ export class SandboxPolicyService extends Service {
 
   /** The deployment default mode — the fallback beneath a session override. */
   readonly defaultMode: SandboxMode
+  /** Highest mode that a session or explicit override may select. */
+  readonly maximumMode: SandboxMode
+  /** Canonical ancestor required for every session workspace, when set. */
+  readonly allowedWorkspaceRoot: string | undefined
   /** The absolute `workspace-write` fallback root for calls without a session cwd. */
   readonly workspaceRoot: string
   constructor(ctx: Context, config: Config) {
@@ -128,6 +139,9 @@ export class SandboxPolicyService extends Service {
     // runtime fact. `workspaceRoot` has NO schema default, so its fallback to
     // the process cwd is real branching, resolved absolute either way.
     this.defaultMode = config.mode as SandboxMode
+    this.maximumMode = config.maximumMode as SandboxMode
+    this.allowedWorkspaceRoot = config.allowedWorkspaceRoot === undefined
+      ? undefined : realpathSync.native(resolveWorkspaceRoot(config.allowedWorkspaceRoot))
     this.workspaceRoot = resolveWorkspaceRoot(config.workspaceRoot ?? process.cwd())
 
     ctx.sessionProjections.register({
@@ -155,17 +169,28 @@ export class SandboxPolicyService extends Service {
   /**
    * Resolve the complete policy for one capability call. An approved explicit
    * mode outranks the session's last `sandbox/mode` event, which outranks the
-   * deployment default. A session cwd is its workspace-write boundary; the
-   * configured root is the fallback for agentless calls and sessions without a
-   * cwd.
+   * deployment default. The configured maximum caps that selection. A session
+   * cwd is its workspace-write boundary; the configured root is the fallback
+   * for agentless calls and sessions without a cwd. A configured allowed root
+   * rejects a workspace whose canonical path escapes it.
    * @param request - optional session and approved mode override.
    * @returns the fully resolved per-call mode and absolute workspace root.
    */
   resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy {
     const { session } = request
+    const selected = request.mode ?? (session === undefined ? undefined : this.overrideOf(session)) ?? this.defaultMode
+    const rank = { 'read-only': 0, 'workspace-write': 1, 'danger-full-access': 2 }
+    const workspaceRoot = resolveWorkspaceRoot(session?.header.cwd ?? this.workspaceRoot)
+    if (this.allowedWorkspaceRoot !== undefined) {
+      const actual = realpathSync.native(workspaceRoot)
+      const child = relative(this.allowedWorkspaceRoot, actual)
+      if (child === '..' || child.startsWith(`..${sep}`) || isAbsolute(child)) {
+        throw new Error(`sandbox-policy: workspace ${workspaceRoot} is outside allowedWorkspaceRoot`)
+      }
+    }
     return {
-      mode: request.mode ?? (session === undefined ? undefined : this.overrideOf(session)) ?? this.defaultMode,
-      workspaceRoot: resolveWorkspaceRoot(session?.header.cwd ?? this.workspaceRoot),
+      mode: rank[selected] > rank[this.maximumMode] ? this.maximumMode : selected,
+      workspaceRoot,
       ...session === undefined ? {} : { sessionId: session.id },
     }
   }

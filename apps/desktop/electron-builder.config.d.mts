@@ -47,8 +47,8 @@ export interface DesktopElectronBuilderConfig {
   readonly nsis: {
     readonly include: string
     readonly oneClick: false
-    readonly perMachine: false
-    readonly allowElevation: false
+    readonly perMachine: boolean
+    readonly allowElevation: boolean
     readonly allowToChangeInstallationDirectory: false
     readonly installerLanguages: readonly ['en_US', 'zh_CN']
   }
