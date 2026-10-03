@@ -47,7 +47,22 @@ beforeAll(() => {
 afterAll(() => { rmSync(root, { recursive: true, force: true }) })
 
 it.skipIf(process.platform !== 'win32')('accepts the administrator-owned policy provisioned by the deployment script', () => {
-  expect(() => { assertWindowsPolicyAcl(file) }).not.toThrow()
+  let diagnostic = ''
+  const run: WindowsPolicyAclRunner = (command, args, options) => {
+    try {
+      execFileSync(command, args, { windowsHide: options.windowsHide, timeout: options.timeout })
+    } catch (error) {
+      diagnostic = error instanceof Error && 'stderr' in error && error.stderr instanceof Buffer
+        ? error.stderr.toString('utf8').trim()
+        : error instanceof Error ? error.message : String(error)
+      throw error
+    }
+  }
+  try {
+    assertWindowsPolicyAcl(file, run)
+  } catch {
+    throw new Error(`Windows ACL validation rejected provisioned policy: ${diagnostic}`)
+  }
 })
 
 it.skipIf(process.platform !== 'win32')('rejects a policy writable by Authenticated Users', () => {
