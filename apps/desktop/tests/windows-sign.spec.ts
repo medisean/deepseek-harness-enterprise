@@ -297,9 +297,10 @@ describe('Windows token signing', () => {
     }
   })
 
-  it('removes inherited credentials and redacts SignTool process failures', () => {
+  it('removes inherited credentials and PowerShell module paths, then redacts SignTool failures', () => {
     expect(scrubWindowsSigningEnvironment({
       SystemRoot: 'C:\\Windows',
+      PSModulePath: 'incompatible-powershell-modules',
       DSH_DESKTOP_WINDOWS_CER_FILE: 'C:\\release\\server.cer',
       DSH_DESKTOP_WINDOWS_SIGNTOOL: 'C:\\tools\\signtool.exe',
       DSH_DESKTOP_WINDOWS_TOKEN_PIN: 'token-secret',
