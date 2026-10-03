@@ -71,6 +71,7 @@ it('fails closed when managed OIDC has no access token or Host auth provider', a
   const ctx = new Context()
   contexts.push(ctx)
   ctx.provide('profileContext', managedProfile())
+  ctx.enterpriseAuth = undefined
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(ApiKey, { baseURL: 'https://provider.example.test/v1' })
 
