@@ -55,11 +55,20 @@ function Set-EnterpriseAcl([string]$Path, [bool]$IsDirectory) {
   $acl.AddAccessRule($adminRule)
   $acl.AddAccessRule($systemRule)
   $acl.AddAccessRule($usersRule)
-  Set-Acl -LiteralPath $Path -AclObject $acl
+  if ($IsDirectory) {
+    [System.IO.Directory]::SetAccessControl($Path, $acl)
+  } else {
+    [System.IO.File]::SetAccessControl($Path, $acl)
+  }
 }
 
 function Assert-EnterpriseAcl([string]$Path) {
-  $acl = Get-Acl -LiteralPath $Path
+  $item = Get-Item -LiteralPath $Path -Force
+  if (($item.Attributes -band [System.IO.FileAttributes]::Directory) -ne 0) {
+    $acl = [System.IO.Directory]::GetAccessControl($Path)
+  } else {
+    $acl = [System.IO.File]::GetAccessControl($Path)
+  }
   $owner = ([System.Security.Principal.NTAccount]$acl.Owner).Translate(
     [System.Security.Principal.SecurityIdentifier]).Value
   if ($owner -notin @($adminsSid.Value, $systemSid.Value)) { throw "Policy path owner is not an administrator: $Path" }

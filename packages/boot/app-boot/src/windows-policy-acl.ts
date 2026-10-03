@@ -35,7 +35,11 @@ $writeRights = [int64]([Security.AccessControl.FileSystemRights]::WriteData -bor
 foreach ($candidate in @($path, (Split-Path -LiteralPath $path -Parent))) {
   $item = Get-Item -LiteralPath $candidate -Force
   if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'reparse point' }
-  $acl = Get-Acl -LiteralPath $candidate
+  if (($item.Attributes -band [IO.FileAttributes]::Directory) -ne 0) {
+    $acl = [IO.Directory]::GetAccessControl($candidate)
+  } else {
+    $acl = [IO.File]::GetAccessControl($candidate)
+  }
   $owner = ([Security.Principal.NTAccount]$acl.Owner).Translate([Security.Principal.SecurityIdentifier]).Value
   if ($owner -notin $allowedOwners) { throw 'untrusted owner' }
   foreach ($rule in $acl.Access) {
