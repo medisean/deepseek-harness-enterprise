@@ -41,9 +41,14 @@ try {
     )
     foreach ($rule in $acl.Access) {
         if ($rule.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow) { continue }
-        $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier])
-        if (($principals | Where-Object { $_.Value -eq $sid.Value }) -and (($rule.FileSystemRights -band $writeRights) -ne 0)) {
-            throw "The machine-wide install grants write access to $($sid.Value)"
+        $sid = $rule.IdentityReference.Value
+        if ($sid -notmatch '^S-\d-\d+(?:-\d+)+$') {
+            # Unresolvable domain accounts cannot match the built-in SIDs under test.
+            try { $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value }
+            catch [Security.Principal.IdentityNotMappedException] { continue }
+        }
+        if (($principals | Where-Object { $_.Value -eq $sid }) -and (($rule.FileSystemRights -band $writeRights) -ne 0)) {
+            throw "The machine-wide install grants write access to $sid"
         }
     }
     Write-Output 'PASS: silent-install-under-Program-Files'
