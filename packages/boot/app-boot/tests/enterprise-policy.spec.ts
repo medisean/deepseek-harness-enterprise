@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, Stats, symlinkSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -165,6 +165,19 @@ describe('managed Desktop policy', () => {
     mkdirSync(directory)
     symlinkSync('/dev/null', join(directory, 'device-link'))
     expect(() => hashEnterpriseBundleDirectory(directory, '/')).toThrow('symbolic links must resolve inside')
+  })
+
+  it('rejects an unsupported file type reported by the filesystem', () => {
+    const directory = join(root, 'bundle-unsupported-file')
+    mkdirSync(directory)
+    writeFileSync(join(directory, 'entry'), 'content')
+    const regularFile = vi.spyOn(Stats.prototype, 'isFile').mockReturnValue(false)
+    try {
+      expect(() => hashEnterpriseBundleDirectory(directory)).toThrow('only regular files and directories are allowed')
+    } finally {
+      regularFile.mockRestore()
+    }
+    expect(hashEnterpriseBundleDirectory(directory)).toMatch(/^[a-f0-9]{64}$/u)
   })
 
   it.skipIf(process.platform === 'win32')('rejects a FIFO in the installed bundle tree', () => {

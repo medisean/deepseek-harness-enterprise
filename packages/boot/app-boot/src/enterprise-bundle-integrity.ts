@@ -28,7 +28,6 @@ export function hashEnterpriseBundleDirectory(directory: string, allowedRoot = d
       }
       else {
         if (info.isFile()) entries.push({ path, kind: 'file' })
-        /* v8 ignore else -- Windows has no FIFO or device-file fixture; POSIX coverage verifies this rejection. */
         else throw new Error('enterprise bundle: only regular files and directories are allowed')
       }
     }
