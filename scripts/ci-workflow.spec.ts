@@ -231,7 +231,7 @@ describe('CI workflow', () => {
     }
 
     expect(windowsCoverage.name).toBe('windows node 24 / coverage')
-    expect(windowsCoverage.env).toMatchObject({ DSH_COVERAGE_PARTITIONS: "${{ vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '4' || '' }}" })
+    expect(windowsCoverage.env).toMatchObject({ DSH_COVERAGE_PARTITIONS: "${{ vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.repo.fork == false && github.event.pull_request.user.login != 'dependabot[bot]' && '4' || '' }}" })
     const coverageSteps = windowsCoverage.steps as unknown[]
     const coverageCommands = coverageSteps.filter((step): step is Record<string, unknown> & { run: string } => (
       isRecord(step) && typeof step.run === 'string'
@@ -268,7 +268,7 @@ describe('CI workflow', () => {
       'timeout-minutes': 15,
       env: {
         DSH_GATE_FAIL_FAST: '',
-        DSH_PUBLINT_CONCURRENCY: "${{ vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}",
+        DSH_PUBLINT_CONCURRENCY: "${{ vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.repo.fork == false && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}",
       },
     })
     expect(observational?.if).toBeUndefined()
@@ -362,26 +362,49 @@ describe('CI workflow', () => {
     // self-hosted pool when the two values are mutually exclusive.
     const selectors = {
       linux: node24['runs-on'] as string,
+      linuxCoverage: node24Coverage['runs-on'] as string,
+      linuxConsumers: node24Consumers['runs-on'] as string,
+      nodeCompat: nodeCompat['runs-on'] as string,
       linuxAggregate: aggregate['runs-on'] as string,
       windows: windowsBuild['runs-on'] as string,
+      windowsCoverage: windowsCoverage['runs-on'] as string,
+      windowsNativeTests: windowsNativeTests['runs-on'] as string,
     }
-    const evaluate = (expression: string, vars: Record<string, string>, login = 'maintainer'): unknown => {
+    const evaluate = (
+      expression: string,
+      vars: Record<string, string>,
+      login = 'maintainer',
+      headRepository = 'medisean/deepseek-harness-enterprise',
+      isFork = false,
+    ): unknown => {
       return evaluateRunsOn(expression, {
         vars,
         fromJSON: JSON.parse,
-        github: { event: { pull_request: { user: { login } } } },
+        github: {
+          repository: 'medisean/deepseek-harness-enterprise',
+          event: { pull_request: { user: { login }, head: { repo: { full_name: headRepository, fork: isFork } } } },
+        },
+        matrix: { runner: 'ubuntu-latest' },
       })
     }
     for (const [name, selector, variable, pool, hosted] of [
       ['linux gates', selectors.linux, 'DSH_CI_FAILOVER_LINUX', ['self-hosted', 'linux', 'x64', 'vm-backup'], 'dsh-ubuntu-24-04-16core'],
+      ['linux coverage', selectors.linuxCoverage, 'DSH_CI_FAILOVER_LINUX', ['self-hosted', 'linux', 'x64', 'vm-backup'], 'dsh-ubuntu-24-04-16core'],
+      ['linux consumers', selectors.linuxConsumers, 'DSH_CI_FAILOVER_LINUX', ['self-hosted', 'linux', 'x64', 'vm-backup'], 'dsh-ubuntu-24-04-16core'],
+      ['node compatibility', selectors.nodeCompat, 'DSH_CI_FAILOVER_LINUX', ['self-hosted', 'linux', 'x64', 'vm-backup'], 'ubuntu-latest'],
       ['linux aggregate', selectors.linuxAggregate, 'DSH_CI_FAILOVER_LINUX', ['self-hosted', 'linux', 'x64', 'vm-backup'], 'ubuntu-latest'],
       ['windows lanes', selectors.windows, 'DSH_CI_FAILOVER_WINDOWS', ['self-hosted', 'dsh-win-ci', 'windows'], 'dsh-windows-2025-16core'],
+      ['windows coverage', selectors.windowsCoverage, 'DSH_CI_FAILOVER_WINDOWS', ['self-hosted', 'dsh-win-ci', 'windows'], 'dsh-windows-2025-16core'],
+      ['windows native tests', selectors.windowsNativeTests, 'DSH_CI_FAILOVER_WINDOWS', ['self-hosted', 'dsh-win-ci', 'windows'], 'dsh-windows-2025-16core'],
     ] as const) {
       expect(evaluate(selector, { [variable]: 'blacksmith' }), `${name} blacksmith value`).toMatch(/^blacksmith-/)
       expect(evaluate(selector, { [variable]: 'selfhosted' }), `${name} selfhosted value`).toEqual(pool)
       // The blacksmith branch must not capture the selfhosted pool, and the
       // dependabot exclusion applies to the pool, not to the blacksmith tier.
       expect(evaluate(selector, { [variable]: 'selfhosted' }, 'dependabot[bot]'), `${name} dependabot on selfhosted`).toBe(hosted)
+      expect(evaluate(selector, { [variable]: 'selfhosted' }, 'contributor', 'someone/fork', true), `${name} fork on selfhosted`).toBe(hosted)
+      expect(evaluate(selector, { [variable]: 'selfhosted' }, 'contributor', 'medisean/deepseek-harness-enterprise', true), `${name} fork flag on selfhosted`).toBe(hosted)
+      expect(evaluate(selector, { [variable]: 'blacksmith' }, 'contributor', 'someone/fork', true), `${name} fork on blacksmith`).toMatch(/^blacksmith-/)
       for (const mode of ['', 'hosted', 'unexpected']) {
         expect(evaluate(selector, { [variable]: mode }), `${name} default on ${mode}`).toBe(hosted)
       }
