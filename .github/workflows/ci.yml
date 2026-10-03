@@ -689,6 +689,7 @@ jobs:
           packages/workflow/tool-ralph/tests/integration.spec.ts
           packages/subprocess/subprocess-local/tests/process-exit.spec.ts
           packages/boot/app-boot/tests/enterprise-policy.spec.ts
+          packages/boot/app-boot/tests/windows-policy-acl.spec.ts
           packages/sandbox/sandbox-policy/tests/policy.spec.ts
           packages/llm/llm-deepseek-api-key/tests/enterprise-gateway.spec.ts
           apps/cli/tests/enterprise-cli.spec.ts

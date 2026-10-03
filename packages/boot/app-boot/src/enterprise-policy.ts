@@ -1,6 +1,7 @@
 /** Administrator-owned policy for the managed Desktop distribution. */
 import { lstatSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, isAbsolute, parse, resolve, win32 } from 'node:path'
+import { assertWindowsPolicyAcl } from './windows-policy-acl.ts'
 
 /** Settings accepted by a managed Desktop process. */
 export interface EnterprisePolicy {
@@ -20,13 +21,16 @@ export function enterprisePolicyPath(platform: NodeJS.Platform = process.platfor
   throw new Error('enterprise policy: managed Desktop supports macOS and Windows only')
 }
 
-/** Read a policy before any plugin mounts; macOS requires a root-owned, non-writable ancestry.
+/** Read a policy before any plugin mounts; macOS checks its root-owned ancestry and Windows checks its machine ACL.
  * @param path - Policy path, fixed by the launcher in production.
  * @param platform - Host platform.
  * @returns Validated immutable policy.
  */
 export function loadEnterprisePolicy(path = enterprisePolicyPath(), platform: NodeJS.Platform = process.platform): EnterprisePolicy {
   const absolute = resolve(path)
+  if (platform === 'win32' && absolute === resolve(enterprisePolicyPath('win32'))) {
+    assertWindowsPolicyAcl(absolute)
+  }
   if (platform === 'darwin') {
     for (let current = absolute; ; current = dirname(current)) {
       const info = lstatSync(current)

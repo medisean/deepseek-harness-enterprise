@@ -22,10 +22,27 @@ jobs:
         with:
           node-version: '24'
       - run: pnpm install --frozen-lockfile
+      - name: Verify macOS policy file permissions
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          policy='/Library/Application Support/DeepSeek Harness Enterprise/policy.json'
+          workspace="$RUNNER_TEMP/enterprise-workspace"
+          sudo mkdir -p "$(dirname "$policy")" "$workspace"
+          sudo chown root:wheel "$(dirname "$policy")"
+          sudo chmod 755 "$(dirname "$policy")"
+          sudo tee "$policy" >/dev/null <<EOF
+          {"version":1,"modelGateway":"https://gateway.example.test/anthropic","workspaceMode":"read-only","workspaceRoot":"$workspace"}
+          EOF
+          sudo bash deploy/enterprise/secure-policy-macos.sh
+          test "$(stat -f '%u %Lp' "$policy")" = '0 644'
+          sudo rm -f "$policy"
+          sudo rmdir "$(dirname "$policy")"
       - name: Managed policy and capability tests
         run: >-
           pnpm exec vitest run
           packages/boot/app-boot/tests/enterprise-policy.spec.ts
+          packages/boot/app-boot/tests/windows-policy-acl.spec.ts
           packages/sandbox/sandbox-policy/tests/policy.spec.ts
           packages/llm/llm-deepseek-api-key/tests/enterprise-gateway.spec.ts
           apps/cli/tests/enterprise-cli.spec.ts

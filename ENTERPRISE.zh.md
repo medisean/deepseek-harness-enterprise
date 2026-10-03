@@ -15,7 +15,7 @@
 }
 ```
 
-`modelGateway` 必须是企业批准的 HTTPS Messages 兼容网关，不能是 `api.deepseek.com`；`workspaceMode` 只接受 `read-only` 或 `workspace-write`。`workspaceRoot` 必须是已存在的绝对目录，不能是文件系统根目录；Windows 部署时使用 Windows 绝对路径。策略缺失、损坏或字段不符时，Desktop 拒绝启动。macOS 还检查策略文件及其父目录均由 root 拥有，且组和其他用户不可写；Windows 部署程序必须为该目录和文件设置仅管理员可写的 ACL。本仓库当前不提供 Windows 策略 ACL 的运行时证明。
+`modelGateway` 必须是企业批准的 HTTPS Messages 兼容网关，不能是 `api.deepseek.com`；`workspaceMode` 只接受 `read-only` 或 `workspace-write`。`workspaceRoot` 必须是已存在的绝对目录，不能是文件系统根目录；Windows 部署时使用 Windows 绝对路径。策略缺失、损坏或字段不符时，Desktop 拒绝启动。macOS 检查策略文件及其父目录均由 root 拥有，且组和其他用户不可写；Windows 检查策略文件和目录的所有者及写入 ACL，写权限只允许 Administrators 或 SYSTEM。
 
 受管 Desktop 只接受随安装包交付的 `dsh-base` 和 `dsh-web-app` 组合，并要求 profile、home 和启动补丁为空。桌面端随附的 `dsh` 命令只允许启动受管 Desktop profile。管理员应将安装目录设为普通用户不可写，并使用企业签名和软件分发机制交付安装包；源码 CLI 的其他 profile 不属于受管模式。
 
@@ -29,8 +29,8 @@
 
 ## 部署侧必须完成
 
-1. 将策略放在上述机器级路径，并保护策略和安装目录的写权限；Windows 还需验证 ACL。为员工分配独立系统账户、Harness home 与工作目录。
+1. 将策略放在上述机器级路径。创建策略文件后，macOS 管理员运行 `sudo bash deploy/enterprise/secure-policy-macos.sh`；Windows 管理员运行 `powershell -ExecutionPolicy Bypass -File .\deploy\enterprise\Secure-Policy.ps1`。两个脚本为策略及其目录设置管理员保护；Windows 脚本还检查策略字段。应用启动时会独立验证策略内容与平台权限。为员工分配独立系统账户、Harness home 与工作目录。
 2. 将网关地址解析、TLS 证书和凭据接入企业网络。通过终端防火墙、代理或网络隔离，只允许应用及其子进程访问批准的网关和必要内网服务。应用内禁用工具不能限制 Electron 视图、外部浏览器或其他进程的所有出站连接。
 3. 用非敏感样本核对请求目的地与请求体，再按企业保留期限处理会话、凭据和诊断文件。
 
-本仓库没有提供多用户服务端隔离、SSO、集中审计、第三方插件审批清单或完整的 Windows ACL 和出站规则安装器。macOS 本地策略与组合测试已运行；Windows 的真实安装、ACL 与网络阻断仍需在 Windows 测试机验收。
+本仓库没有提供多用户服务端隔离、SSO、集中审计、第三方插件审批清单或出站规则安装器。Windows ACL 配置脚本已提供，但 Windows 的真实安装、ACL 与网络阻断仍需在 Windows 测试机验收。

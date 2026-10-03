@@ -1,9 +1,12 @@
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { join, resolve } from 'node:path'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { bundlePatchPaths, composeEntries, enterprisePolicyPath, loadEnterprisePolicy, loadOverlayPatches,
   readProfilePatches, type Profile } from '../src/index.ts'
+
+const windowsAcl = vi.hoisted(() => ({ check: vi.fn() }))
+vi.mock('../src/windows-policy-acl.ts', () => ({ assertWindowsPolicyAcl: windowsAcl.check }))
 
 const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-enterprise-policy-')))
 afterAll(() => { rmSync(root, { recursive: true, force: true }) })
@@ -25,6 +28,12 @@ describe('managed Desktop policy', () => {
     expect(() => loadEnterprisePolicy(file, 'win32')).toThrow('expected version 1')
     writeFileSync(file, JSON.stringify(policy))
     expect(loadEnterprisePolicy(file, 'win32')).toEqual(policy)
+  })
+
+  it('checks Windows machine policy permissions before reading the file', () => {
+    const file = enterprisePolicyPath('win32')
+    expect(() => loadEnterprisePolicy(file, 'win32')).toThrow()
+    expect(windowsAcl.check).toHaveBeenCalledWith(resolve(file))
   })
 
   it.skipIf(process.platform !== 'darwin')('rejects a user-owned policy ancestry on macOS', () => {
