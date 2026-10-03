@@ -1,14 +1,29 @@
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { readFileSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose'
+import { allowInsecureRequests, discovery } from 'openid-client'
 import { createAccessTokenVerifier, createEnterpriseGateway, loadConfig } from '../src/server.mjs'
+import { EnterpriseOidcSession, EnterpriseTokenVault, type EnterpriseTokenEncryption } from '../../desktop/src/enterprise-oidc.ts'
 
 const servers: Server[] = []
+const sessions: EnterpriseOidcSession[] = []
+const temporaryRoots: string[] = []
 const issuer = 'https://id.example.test/tenant'
 const audience = 'https://gateway.example.test/'
 type TokenOptions = { issuer?: string; audience?: string; expiresIn?: number }
 type SignToken = (claims: Record<string, unknown>, options?: TokenOptions) => Promise<string>
+type TestOidcPolicy = {
+  issuer: string
+  clientId: string
+  gatewayScope: string
+  scopes: string[]
+  audience: string
+}
 type TestConfig = ReturnType<typeof gatewayConfig> & {
   localJwks: ReturnType<typeof createLocalJWKSet>
   verify: ReturnType<typeof createAccessTokenVerifier>
@@ -16,10 +31,12 @@ type TestConfig = ReturnType<typeof gatewayConfig> & {
 }
 
 afterEach(async () => {
+  await Promise.all(sessions.splice(0).map(session => session.cancelSignIn()))
   await Promise.all(servers.splice(0).map(async (server) => {
     server.closeAllConnections()
     await new Promise<void>((resolve) => { server.close(() => { resolve() }) })
   }))
+  await Promise.all(temporaryRoots.splice(0).map(path => rm(path, { recursive: true, force: true })))
 })
 
 it('validates deployment settings and requires HTTPS endpoints and a key file', () => {
@@ -126,6 +143,98 @@ it('validates signed access tokens with issuer, audience, expiry, subject, and s
   await expect(verify(await sign({ sub: 'employee-42', scope: 'model:run' }, { issuer: 'https://wrong.example/' })))
     .rejects.toThrow()
   await expect(verify(await sign({ sub: 'employee-42', scope: 'model:run' }, { expiresIn: -1 }))).rejects.toThrow()
+})
+
+it('uses a Desktop OIDC access token to authenticate a request through the enterprise gateway', async () => {
+  const { privateKey, publicKey } = await generateKeyPair('RS256')
+  const publicJwk = { ...await exportJWK(publicKey), kid: 'sso-gateway-test-key', use: 'sig', alg: 'RS256' }
+  const localJwks = createLocalJWKSet({ keys: [publicJwk] })
+  const authorize = { url: undefined as URL | undefined }
+  let policy: TestOidcPolicy = {
+    issuer: 'http://127.0.0.1', clientId: 'managed-desktop', gatewayScope: 'model:run',
+    scopes: ['openid', 'profile', 'model:run'], audience,
+  }
+  const issuerServer = createServer((request, response) => {
+    void (async () => {
+      const url = new URL(request.url ?? '/', policy.issuer)
+      if (url.pathname === '/.well-known/openid-configuration') {
+        json(response, { issuer: policy.issuer, authorization_endpoint: `${policy.issuer}/authorize`,
+          token_endpoint: `${policy.issuer}/token`, jwks_uri: `${policy.issuer}/jwks`,
+          response_types_supported: ['code'], subject_types_supported: ['public'],
+          id_token_signing_alg_values_supported: ['RS256'], token_endpoint_auth_methods_supported: ['none'] })
+        return
+      }
+      if (url.pathname === '/jwks') { json(response, { keys: [publicJwk] }); return }
+      if (url.pathname === '/token' && request.method === 'POST') {
+        const parameters = new URLSearchParams(await requestText(request))
+        const verifier = parameters.get('code_verifier') ?? ''
+        const challenge = createHash('sha256').update(verifier).digest('base64url')
+        if (authorize.url?.searchParams.get('code_challenge') !== challenge
+          || parameters.get('resource') !== audience) {
+          response.writeHead(400).end()
+          return
+        }
+        const now = Math.floor(Date.now() / 1000)
+        const accessToken = await new SignJWT({ scope: 'model:run', tenant_id: 'engineering' })
+          .setProtectedHeader({ alg: 'RS256', kid: 'sso-gateway-test-key' }).setIssuer(policy.issuer)
+          .setSubject('employee-sso-1').setAudience(audience).setIssuedAt(now).setExpirationTime(now + 300)
+          .sign(privateKey)
+        const idToken = await new SignJWT({ nonce: authorize.url?.searchParams.get('nonce') })
+          .setProtectedHeader({ alg: 'RS256', kid: 'sso-gateway-test-key' }).setIssuer(policy.issuer)
+          .setSubject('employee-sso-1').setAudience(policy.clientId).setIssuedAt(now).setExpirationTime(now + 300)
+          .sign(privateKey)
+        json(response, { access_token: accessToken, id_token: idToken, refresh_token: 'refresh-secret',
+          token_type: 'Bearer', expires_in: 300 })
+        return
+      }
+      response.writeHead(404).end()
+    })()
+  })
+  const issuerUrl = await listen(issuerServer)
+  policy = { ...policy, issuer: issuerUrl }
+
+  const upstreamRequests: Array<{ authorization: string | undefined; apiKey: string | undefined; body: string }> = []
+  const upstream = createServer((request, response) => {
+    void (async () => {
+      upstreamRequests.push({ authorization: request.headers.authorization,
+        apiKey: request.headers['x-api-key'] as string | undefined, body: await requestText(request) })
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end('{"type":"message","usage":{"input_tokens":1,"output_tokens":2}}')
+    })()
+  })
+  const upstreamUrl = await listen(upstream)
+  const config = { ...gatewayConfig(), issuer: policy.issuer, upstream: new URL(upstreamUrl) }
+  const verify = createAccessTokenVerifier(config, localJwks)
+  const audit: Array<Record<string, unknown>> = []
+  const gateway = createEnterpriseGateway(config, { verify,
+    audit: (event: Record<string, unknown>) => { audit.push(event) } })
+  const gatewayUrl = await listen(gateway)
+  const root = await mkdtemp(join(tmpdir(), 'dsh-enterprise-sso-gateway-'))
+  temporaryRoots.push(root)
+  const session = new EnterpriseOidcSession(policy, new EnterpriseTokenVault(root, new TestEncryption()), {
+    discovery: (issuerUrlValue, clientId, metadata, auth) => discovery(issuerUrlValue, clientId, metadata, auth, {
+      // oxlint-disable-next-line typescript/no-deprecated -- The test IdP binds only to its allocated loopback port.
+      execute: [allowInsecureRequests],
+    }),
+  })
+  sessions.push(session)
+  const flow = await session.startSignIn()
+  authorize.url = new URL(flow.authorizeUrl)
+  const callback = new URL(authorize.url.searchParams.get('redirect_uri')!)
+  callback.searchParams.set('code', 'one-time-code')
+  callback.searchParams.set('state', authorize.url.searchParams.get('state')!)
+  expect((await fetch(callback)).status).toBe(200)
+  await flow.completion
+
+  const token = await session.getAccessToken()
+  expect(token).toBeTruthy()
+  const body = JSON.stringify({ model: 'deepseek-chat', max_tokens: 10, messages: [{ role: 'user', content: 'private prompt' }] })
+  const response = await post(gatewayUrl, body, token)
+  expect(response.status).toBe(200)
+  expect(upstreamRequests).toEqual([{ authorization: undefined, apiKey: 'server-side-secret', body }])
+  expect(audit).toHaveLength(1)
+  expect(JSON.stringify(audit)).not.toContain('private prompt')
+  expect(JSON.stringify(audit)).not.toContain(token)
 })
 
 it('proxies only authorized, allowlisted Messages requests and emits content-free audit records', async () => {
@@ -339,6 +448,17 @@ async function requestText(request: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = []
   for await (const chunk of request) chunks.push(toBuffer(chunk))
   return Buffer.concat(chunks).toString('utf8')
+}
+
+function json(response: import('node:http').ServerResponse, value: unknown): void {
+  response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+  response.end(JSON.stringify(value))
+}
+
+class TestEncryption implements EnterpriseTokenEncryption {
+  isEncryptionAvailable(): boolean { return true }
+  encryptString(value: string): Buffer { return Buffer.from(value, 'utf8').reverse() }
+  decryptString(value: Buffer): string { return Buffer.from(value).reverse().toString('utf8') }
 }
 
 function toBuffer(value: unknown): Buffer {
