@@ -41,6 +41,8 @@ jobs:
       - name: Managed policy and capability tests
         run: >-
           pnpm exec vitest run
+          --coverage
+          --coverage.include=packages/boot/app-boot/src/enterprise-bundle-integrity.ts
           packages/boot/app-boot/tests/enterprise-policy.spec.ts
           packages/boot/app-boot/tests/windows-policy-acl.spec.ts
           packages/sandbox/sandbox-policy/tests/policy.spec.ts
