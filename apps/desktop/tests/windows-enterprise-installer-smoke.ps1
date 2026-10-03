@@ -8,9 +8,12 @@ $appPath = Join-Path $installPath ($ProductName + '.exe')
 $uninstaller = Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')
 $appRegistry = 'HKLM:\Software\' + $RegistryKey
 $uninstallRegistry = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $RegistryKey
-$writeRights = [Security.AccessControl.FileSystemRights]::Write -bor
-    [Security.AccessControl.FileSystemRights]::Modify -bor
-    [Security.AccessControl.FileSystemRights]::FullControl -bor
+# Composite rights overlap on read-only permission bits, so check only mutating access flags.
+$writeRights = [Security.AccessControl.FileSystemRights]::WriteData -bor
+    [Security.AccessControl.FileSystemRights]::AppendData -bor
+    [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+    [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+    [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
     [Security.AccessControl.FileSystemRights]::Delete -bor
     [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
     [Security.AccessControl.FileSystemRights]::TakeOwnership
